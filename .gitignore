@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.env
+
+# OS / Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Windows / OneDrive junk
+AppData/
+Downloads/
+Documents/
+NTUSER.*
+OneDrive*
+
+# Virtual envs
+.venv/
+venv/
+
+# Ignore entire user profile and system files
+../../../*
+
+# But allow our project files
+!TripleSeat/
+!requirements.txt
+!README.md
+!.gitignore

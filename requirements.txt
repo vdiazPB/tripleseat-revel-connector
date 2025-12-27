@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+sendgrid
+requests
+python-dotenv
