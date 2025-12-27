@@ -1,6 +1,6 @@
 import logging
-from .models import ValidationResult
-from .api_client import TripleSeatAPIClient
+from integrations.tripleseat.models import ValidationResult
+from integrations.tripleseat.api_client import TripleSeatAPIClient
 
 logger = logging.getLogger(__name__)
 

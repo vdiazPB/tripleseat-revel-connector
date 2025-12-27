@@ -3,8 +3,8 @@ from fastapi import Request, HTTPException
 import hmac
 import hashlib
 import os
-from .validation import validate_event
-from .time_gate import check_time_gate
+from integrations.tripleseat.validation import validate_event
+from integrations.tripleseat.time_gate import check_time_gate
 from integrations.revel.injection import inject_order
 from emailer.sendgrid_emailer import send_success_email, send_failure_email
 

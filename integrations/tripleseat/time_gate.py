@@ -3,7 +3,7 @@ import json
 import os
 from datetime import datetime, time
 from typing import Optional
-from .api_client import TripleSeatAPIClient
+from integrations.tripleseat.api_client import TripleSeatAPIClient
 
 logger = logging.getLogger(__name__)
 
