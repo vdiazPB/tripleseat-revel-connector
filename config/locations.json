@@ -1,0 +1,67 @@
+{
+  "1": {
+    "name": "Pinkbox Tropicana",
+    "revel_establishment": "1",
+    "timezone": "America/Los_Angeles"
+  },
+  "2": {
+    "name": "Pinkbox Lake Mead",
+    "revel_establishment": "2",
+    "timezone": "America/Los_Angeles"
+  },
+  "3": {
+    "name": "Pinkbox Eastern",
+    "revel_establishment": "3",
+    "timezone": "America/Los_Angeles"
+  },
+  "5": {
+    "name": "Pinkbox Primm",
+    "revel_establishment": "5",
+    "timezone": "America/Los_Angeles"
+  },
+  "6": {
+    "name": "Pinkbox Sunset",
+    "revel_establishment": "6",
+    "timezone": "America/Los_Angeles"
+  },
+  "7": {
+    "name": "Pinkbox BM",
+    "revel_establishment": "7",
+    "timezone": "America/Los_Angeles"
+  },
+  "9": {
+    "name": "Pinkbox St George",
+    "revel_establishment": "9",
+    "timezone": "America/Denver"
+  },
+  "10": {
+    "name": "Pinkbox Craig Rd",
+    "revel_establishment": "10",
+    "timezone": "America/Los_Angeles"
+  },
+  "12": {
+    "name": "Pinkbox Plaza",
+    "revel_establishment": "12",
+    "timezone": "America/Los_Angeles"
+  },
+  "13": {
+    "name": "Pinkbox Laughlin",
+    "revel_establishment": "13",
+    "timezone": "America/Los_Angeles"
+  },
+  "14": {
+    "name": "Pinkbox Pahrump",
+    "revel_establishment": "14",
+    "timezone": "America/Los_Angeles"
+  },
+  "16": {
+    "name": "Centennial Hills",
+    "revel_establishment": "16",
+    "timezone": "America/Los_Angeles"
+  },
+  "17": {
+    "name": "Pinkbox Boca Park",
+    "revel_establishment": "17",
+    "timezone": "America/Los_Angeles"
+  }
+}
