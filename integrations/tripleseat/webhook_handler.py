@@ -305,7 +305,8 @@ async def handle_tripleseat_webhook(
             logger.info(f"[req-{correlation_id}] Time gate: SKIPPED (test mode)")
             time_gate_status = "OPEN"
         else:
-            time_gate_result = check_time_gate(event_id, correlation_id)
+            # Pass event data from webhook to time_gate to avoid redundant API call
+            time_gate_result = check_time_gate(event_id, correlation_id, event_data={'event': event})
             if time_gate_result == "PROCEED":
                 logger.info(f"[req-{correlation_id}] Time gate: OPEN")
                 time_gate_status = "OPEN"

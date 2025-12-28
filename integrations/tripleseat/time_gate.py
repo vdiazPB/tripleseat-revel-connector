@@ -7,12 +7,17 @@ from integrations.tripleseat.api_client import TripleSeatAPIClient, TripleSeatFa
 
 logger = logging.getLogger(__name__)
 
-def check_time_gate(event_id: str, correlation_id: str = None) -> str:
+def check_time_gate(event_id: str, correlation_id: str = None, event_data: dict = None) -> str:
     """Check if event is within injection time window.
     
     AUTHENTICATION STRATEGY:
-    - Fetches event data using Public API Key (READ-ONLY)
-    - OAuth is NOT used here (reserved for future WRITE operations)
+    - Uses provided event_data if available (from webhook, no API call needed)
+    - Falls back to Public API Key fetch if event_data not provided
+    
+    Args:
+        event_id: TripleSeat event ID
+        correlation_id: Optional correlation ID for logging
+        event_data: Optional event data dict (from webhook). If provided, skips API call.
     
     Returns:
         "PROCEED" if event is within injection window
@@ -25,15 +30,21 @@ def check_time_gate(event_id: str, correlation_id: str = None) -> str:
         "EVENT_DATA_UNAVAILABLE" if event cannot be fetched
         "AUTHORIZATION_DENIED" if authorization to event denied
     """
-    client = TripleSeatAPIClient()
-    event_data, failure_type = client.get_event_with_status(event_id)
+    # Use provided event_data if available, otherwise fetch from API
+    if event_data:
+        event = event_data.get("event", {})
+        logger.info(f"[req-{correlation_id}] Using provided event_data (no API call)")
+    else:
+        client = TripleSeatAPIClient()
+        response, failure_type = client.get_event_with_status(event_id)
 
-    if not event_data:
-        if failure_type == TripleSeatFailureType.AUTHORIZATION_DENIED:
-            return "AUTHORIZATION_DENIED"
-        return "EVENT_DATA_UNAVAILABLE"
+        if not response:
+            if failure_type == TripleSeatFailureType.AUTHORIZATION_DENIED:
+                return "AUTHORIZATION_DENIED"
+            return "EVENT_DATA_UNAVAILABLE"
 
-    event = event_data.get("event", {})
+        event = response.get("event", {})
+    
     event_date_str = event.get("event_date")
     site_id = event.get("site_id")
 
