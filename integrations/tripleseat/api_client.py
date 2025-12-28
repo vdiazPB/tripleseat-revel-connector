@@ -3,7 +3,7 @@ import os
 from typing import Dict, Any, Optional
 from enum import Enum
 import requests
-from .oauth import get_access_token
+from .oauth1 import get_oauth1_session
 
 logger = logging.getLogger(__name__)
 
@@ -63,26 +63,20 @@ def safe_json_response(response: requests.Response, request_id: str = None) -> O
         raise ValueError(f"JSON_DECODE_ERROR: {e}")
 
 class TripleSeatAPIClient:
-    """TripleSeat API Client - OAuth 2.0 Bearer Token Authentication.
+    """TripleSeat API Client - OAuth 1.0 Signature Authentication.
     
-    Uses OAuth 2.0 access tokens for secure API access.
-    Ensures ALL API calls include proper Authorization: Bearer <token> header.
+    Uses OAuth 1.0 to sign all API requests.
+    Ensures ALL API calls include proper Authorization header with signature.
     """
     
     def __init__(self):
         self.base_url = os.getenv('TRIPLESEAT_API_BASE', 'https://api.tripleseat.com')
+        self.session = get_oauth1_session()
         
-        self.session = requests.Session()
-        # Set default headers for JSON API calls
-        self.session.headers.update({
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        })
-        
-        logger.info("✅ TripleSeatAPIClient initialized with OAuth 2.0 Bearer authentication")
+        logger.info("✅ TripleSeatAPIClient initialized with OAuth 1.0 signature authentication")
 
     def get_event(self, event_id: str) -> Optional[Dict[str, Any]]:
-        """Fetch event details from TripleSeat API using OAuth 2.0 Bearer token.
+        """Fetch event details from TripleSeat API using OAuth 1.0.
         
         Args:
             event_id: TripleSeat event ID
@@ -91,19 +85,13 @@ class TripleSeatAPIClient:
             Event dictionary or None if API call fails
         """
         try:
-            # Get valid OAuth 2.0 Bearer token
-            token = get_access_token()
-            
-            # Set Authorization header for this request
-            headers = {'Authorization': f'Bearer {token}'}
-            
             url = f"{self.base_url}/v1/events/{event_id}"
-            response = self.session.get(url, headers=headers, timeout=10)
+            response = self.session.get(url, timeout=10)
             response.raise_for_status()
             
             data = safe_json_response(response)
             if data:
-                logger.info(f"✅ [get_event] Retrieved event {event_id} via OAuth 2.0")
+                logger.info(f"✅ [get_event] Retrieved event {event_id} via OAuth 1.0")
                 return data.get('event')
             return None
         except requests.exceptions.HTTPError as e:
@@ -111,7 +99,7 @@ class TripleSeatAPIClient:
                 logger.warning(f"[get_event] Event {event_id} not found (404)")
                 return None
             elif e.response.status_code == 401:
-                logger.error(f"[get_event] OAuth 2.0 Bearer authentication failed (401)")
+                logger.error(f"[get_event] OAuth 1.0 authentication failed (401)")
                 return None
             logger.error(f"[get_event] HTTP error: {e.response.status_code} - {e}")
             return None
@@ -125,7 +113,7 @@ class TripleSeatAPIClient:
     def get_event_with_status(self, event_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Fetch event and return tuple with status code.
         
-        Uses OAuth 2.0 Bearer token authentication.
+        Uses OAuth 1.0 signature authentication.
         Explicitly rejects HTML responses and validates JSON content.
         
         Args:
@@ -135,26 +123,20 @@ class TripleSeatAPIClient:
             Tuple of (event_dict, status_code) or (None, failure_type)
         """
         try:
-            # Get valid OAuth 2.0 Bearer token
-            token = get_access_token()
-            
-            # Set Authorization header for this request
-            headers = {'Authorization': f'Bearer {token}'}
-            
             url = f"{self.base_url}/v1/events/{event_id}"
             logger.info(f"[get_event_with_status] Requesting: {url}")
             
-            response = self.session.get(url, headers=headers, timeout=10)
+            response = self.session.get(url, timeout=10)
             
             # Handle specific HTTP status codes
             if response.status_code == 404:
                 logger.warning(f"[get_event_with_status] Event {event_id} not found")
                 return None, TripleSeatFailureType.RESOURCE_NOT_FOUND
             elif response.status_code == 401:
-                logger.error(f"[get_event_with_status] OAuth 2.0 Bearer authentication failed (401)")
+                logger.error(f"[get_event_with_status] OAuth 1.0 authentication failed (401)")
                 return None, TripleSeatFailureType.AUTHORIZATION_DENIED
             elif response.status_code == 403:
-                logger.error(f"[get_event_with_status] OAuth 2.0 access forbidden (403)")
+                logger.error(f"[get_event_with_status] OAuth 1.0 access forbidden (403)")
                 return None, TripleSeatFailureType.AUTHORIZATION_DENIED
             elif response.status_code != 200:
                 logger.error(f"[get_event_with_status] HTTP {response.status_code}: Unexpected status")
@@ -191,24 +173,18 @@ class TripleSeatAPIClient:
             return None, TripleSeatFailureType.API_ERROR
 
     def check_tripleseat_access(self) -> bool:
-        """Check if OAuth 2.0 Bearer token authentication is valid."""
+        """Check if OAuth 1.0 authentication is valid."""
         try:
-            # Get valid OAuth 2.0 Bearer token
-            token = get_access_token()
-            
-            # Set Authorization header for this request
-            headers = {'Authorization': f'Bearer {token}'}
-            
             # Try a simple API call to verify auth
             url = f"{self.base_url}/v1/events"
-            response = self.session.get(url, headers=headers, timeout=10, params={'limit': 1})
+            response = self.session.get(url, timeout=10, params={'limit': 1})
             is_valid = response.status_code == 200
             
             if is_valid:
-                logger.info("✅ [check_tripleseat_access] OAuth 2.0 Bearer authentication valid")
+                logger.info("✅ [check_tripleseat_access] OAuth 1.0 authentication valid")
             else:
-                logger.warning(f"[check_tripleseat_access] OAuth 2.0 check failed: {response.status_code}")
+                logger.warning(f"[check_tripleseat_access] OAuth 1.0 check failed: {response.status_code}")
             return is_valid
         except Exception as e:
-            logger.error(f"[check_tripleseat_access] OAuth 2.0 validation error: {e}")
+            logger.error(f"[check_tripleseat_access] OAuth 1.0 validation error: {e}")
             return False
