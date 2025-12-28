@@ -77,6 +77,7 @@ def inject_order(
 
     event = event_data.get("event", {})
     site_id = event.get("site_id")
+    booking_id = event.get("booking_id")
 
     # Determine establishment (TEST MODE OVERRIDE)
     if test_location_override:
@@ -106,6 +107,27 @@ def inject_order(
         tripleseat_items = event.get("menu_items", [])
     if not tripleseat_items:
         tripleseat_items = event_data.get("menu_items", [])
+    
+    # If no items found, try fetching from booking (TripleSeat stores items in custom fields)
+    if not tripleseat_items and booking_id:
+        logger.info(f"[req-{correlation_id}] No items in event, checking booking {booking_id}")
+        booking_url = f"{ts_client.base_url}/v1/bookings/{booking_id}"
+        try:
+            booking_response = ts_client.session.get(booking_url, timeout=10)
+            if booking_response.status_code == 200:
+                booking_data = booking_response.json()
+                booking_obj = booking_data.get('booking', {})
+                custom_fields = booking_obj.get('custom_fields', [])
+                
+                # Look for Boxing/Packing Slip custom field which contains the item name
+                packing_slip = next((cf for cf in custom_fields if 'packing' in cf.get('custom_field_name', '').lower() or 'boxing' in cf.get('custom_field_name', '').lower()), None)
+                
+                if packing_slip and packing_slip.get('value'):
+                    item_name = packing_slip.get('value').strip()
+                    logger.info(f"[req-{correlation_id}] Found item in custom field: {item_name}")
+                    tripleseat_items = [{'name': item_name, 'quantity': 1}]
+        except Exception as e:
+            logger.warning(f"[req-{correlation_id}] Failed to fetch booking details: {e}")
     
     logger.info(f"[req-{correlation_id}] Found {len(tripleseat_items)} line items in TripleSeat event")
 
