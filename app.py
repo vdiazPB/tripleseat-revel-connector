@@ -37,6 +37,16 @@ logger.info(f"ALLOWED_LOCATIONS: {allowed_locations if allowed_locations and all
 if test_location_override:
     logger.warning(f"TEST_LOCATION_OVERRIDE ENABLED – All orders routed to establishment {test_establishment_id}")
 
+@app.api_route("/", methods=["GET", "HEAD"])
+def root():
+    """Root path - used for Render health checks and endpoint validation.
+    
+    Supports both GET and HEAD requests.
+    No authentication required.
+    No database or OAuth calls.
+    """
+    return {"status": "ok"}
+
 @app.get("/health")
 def health():
     # Get current time with timezone
