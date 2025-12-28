@@ -244,6 +244,32 @@ def debug_oauth():
     
     return result
 
+@app.get("/debug/order/{order_id}")
+def debug_order(order_id: str):
+    """Debug endpoint to check if an order exists in Revel."""
+    try:
+        client = RevelAPIClient()
+        
+        # Try to fetch the order directly from the API
+        import requests
+        url = f"{client.base_url}/resources/Order/{order_id}/"
+        headers = client._get_headers()
+        
+        response = requests.get(url, headers=headers)
+        
+        return {
+            "order_id": order_id,
+            "status": response.status_code,
+            "found": response.status_code == 200,
+            "response": response.json() if response.status_code == 200 else response.text[:500]
+        }
+    except Exception as e:
+        logger.error(f"Debug order lookup failed: {e}")
+        return {
+            "order_id": order_id,
+            "error": str(e)
+        }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
