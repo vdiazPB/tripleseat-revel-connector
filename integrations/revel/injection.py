@@ -1,12 +1,87 @@
 import logging
 import os
+import re
+import requests
 from typing import List, Dict, Any, Optional
+from html import unescape
 from integrations.revel.api_client import RevelAPIClient
 from integrations.revel.mappings import get_revel_establishment, get_dining_option_id, get_payment_type_id, get_discount_id
 from integrations.tripleseat.api_client import TripleSeatAPIClient
 from integrations.tripleseat.models import InjectionResult, OrderDetails
 
 logger = logging.getLogger(__name__)
+
+
+def parse_invoice_for_items(invoice_url: str, correlation_id: str = None) -> List[Dict[str, Any]]:
+    """Fetch and parse TripleSeat invoice HTML to extract line items.
+    
+    Looks for table rows matching pattern: Qty Description Price Total
+    
+    Returns:
+        List of dicts with 'name' and 'quantity' keys
+    """
+    req_id = f"[req-{correlation_id}]" if correlation_id else ""
+    
+    try:
+        logger.info(f"{req_id} Fetching invoice from: {invoice_url}")
+        response = requests.get(invoice_url, timeout=15)
+        
+        if response.status_code != 200:
+            logger.warning(f"{req_id} Invoice fetch failed: HTTP {response.status_code}")
+            return []
+        
+        # Extract table rows
+        tr_matches = re.findall(r'<tr[^>]*>(.*?)</tr>', response.text, re.DOTALL | re.IGNORECASE)
+        
+        # Function to extract clean text from HTML
+        def extract_text(html_str):
+            text = re.sub(r'<[^>]+>', '', html_str)
+            text = unescape(text)
+            text = ' '.join(text.split())
+            return text.strip()
+        
+        items = []
+        in_items_section = False
+        
+        for row in tr_matches:
+            text = extract_text(row)
+            
+            # Check for header row "Qty. Qty Description Price Total"
+            if 'qty' in text.lower() and 'description' in text.lower() and 'price' in text.lower():
+                in_items_section = True
+                logger.info(f"{req_id} Found invoice items section")
+                continue
+            
+            # Stop when we hit the totals section
+            if in_items_section and any(keyword in text.lower() for keyword in ['subtotal', 'food (', 'description percent']):
+                break
+            
+            # Parse item rows: "8 ITEM NAME $price $total"
+            if in_items_section and text and '$' in text:
+                # Split by $ to isolate the description
+                parts = text.split('$')
+                if len(parts) >= 3:  # Should have qty+name, price, total
+                    try:
+                        qty_and_name = parts[0].strip()
+                        # Extract quantity from start
+                        qty_match = re.match(r'^(\d+)\s+(.+)', qty_and_name)
+                        if qty_match:
+                            qty = int(qty_match.group(1))
+                            name = qty_match.group(2).strip()
+                            
+                            if name and qty > 0:
+                                items.append({'name': name, 'quantity': qty})
+                                logger.info(f"{req_id} Parsed item: {name} x{qty}")
+                    except Exception as e:
+                        logger.warning(f"{req_id} Failed to parse item row: {text[:100]} - {e}")
+        
+        logger.info(f"{req_id} Extracted {len(items)} items from invoice")
+        return items
+        
+    except Exception as e:
+        logger.error(f"{req_id} Error parsing invoice: {e}")
+        return []
+
 
 
 def resolve_line_items(
@@ -128,6 +203,21 @@ def inject_order(
                     tripleseat_items = [{'name': item_name, 'quantity': 1}]
         except Exception as e:
             logger.warning(f"[req-{correlation_id}] Failed to fetch booking details: {e}")
+    
+    # If still no items, try parsing invoice document
+    if not tripleseat_items and documents:
+        logger.info(f"[req-{correlation_id}] No items found, attempting to parse invoice document")
+        # Find invoice document and its view URL
+        for doc in documents:
+            views = doc.get('views', [])
+            invoice_view = next((v for v in views if 'invoice' in v.get('name', '').lower()), None)
+            if invoice_view:
+                invoice_url = invoice_view.get('url')
+                if invoice_url:
+                    tripleseat_items = parse_invoice_for_items(invoice_url, correlation_id)
+                    if tripleseat_items:
+                        logger.info(f"[req-{correlation_id}] Successfully extracted {len(tripleseat_items)} items from invoice")
+                        break
     
     logger.info(f"[req-{correlation_id}] Found {len(tripleseat_items)} line items in TripleSeat event")
 
