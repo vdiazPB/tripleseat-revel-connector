@@ -179,8 +179,7 @@ class RevelAPIClient:
             'establishment': f'/enterprise/Establishment/{establishment}/',
             'created_by': f'/enterprise/User/{self.default_user_id}/',
             'updated_by': f'/enterprise/User/{self.default_user_id}/',
-            'created_at': f'/resources/PosStation/{self.default_pos_station_id}/',
-            'last_updated_at': f'/resources/PosStation/{self.default_pos_station_id}/',
+            'pos_station': f'/resources/PosStation/{self.default_pos_station_id}/',
             'created_date': now,
             'updated_date': now,
             'dining_option': self.tripleseat_dining_option_id,  # Triple Seat dining option
@@ -200,6 +199,7 @@ class RevelAPIClient:
             # Step 1: Create the order
             url = f"{self.base_url}/resources/Order/"
             logger.info(f"Creating order in Revel (establishment={establishment}, local_id={local_id})")
+            logger.debug(f"Order data being sent: {revel_order_data}")
             response = requests.post(url, headers=headers, json=revel_order_data)
             
             if response.status_code not in [200, 201]:
@@ -208,6 +208,7 @@ class RevelAPIClient:
                 return None
             
             created_order = response.json()
+            logger.debug(f"Order response: {created_order}")
             order_id = created_order.get('id')
             order_uri = created_order.get('resource_uri')
             logger.info(f"✅ Order created: ID={order_id}, URI={order_uri}")
