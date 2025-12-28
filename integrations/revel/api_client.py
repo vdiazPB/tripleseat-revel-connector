@@ -1,6 +1,8 @@
 import os
 import requests
 import logging
+import uuid
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 
 logger = logging.getLogger(__name__)
@@ -17,6 +19,10 @@ class RevelAPIClient:
             self.base_url = f"https://{self.domain}.revelup.com"
         # In-memory product cache (per request/instance)
         self._product_cache: Dict[str, Dict[str, Any]] = {}
+        
+        # Default user and POS station for API orders (configurable via env)
+        self.default_user_id = os.getenv('REVEL_DEFAULT_USER_ID', '209')
+        self.default_pos_station_id = os.getenv('REVEL_DEFAULT_POS_STATION_ID', '4')
 
     def get_products_by_establishment(self, establishment: str) -> List[Dict[str, Any]]:
         """Fetch all products for an establishment from Revel."""
@@ -79,16 +85,114 @@ class RevelAPIClient:
             return None
 
     def create_order(self, order_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Create a new order in Revel."""
-        url = f"{self.base_url}/resources/Order/"
+        """Create a new order in Revel with line items.
+        
+        Order creation requires two steps:
+        1. Create the order record with required fields
+        2. Add order items to the order
+        
+        Args:
+            order_data: Dict containing:
+                - establishment: Revel establishment ID
+                - notes: Order notes/description
+                - local_id: External reference ID (for deduplication)
+                - items: List of line items with product_id, quantity, price
+        
+        Returns:
+            Created order dict with all items, or None on failure
+        """
+        establishment = order_data.get('establishment')
+        notes = order_data.get('notes', '')
+        local_id = order_data.get('local_id', '')
+        items = order_data.get('items', [])
+        
         headers = self._get_headers()
+        now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')
+        order_uuid = str(uuid.uuid4())
+        
+        # Build required fields for order creation
+        revel_order_data = {
+            'uuid': order_uuid,
+            'establishment': f'/enterprise/Establishment/{establishment}/',
+            'created_by': f'/enterprise/User/{self.default_user_id}/',
+            'updated_by': f'/enterprise/User/{self.default_user_id}/',
+            'created_at': f'/resources/PosStation/{self.default_pos_station_id}/',
+            'last_updated_at': f'/resources/PosStation/{self.default_pos_station_id}/',
+            'created_date': now,
+            'updated_date': now,
+            'dining_option': 0,  # 0 = dine in
+            'pos_mode': 'Q',  # Q = quick service
+            'notes': notes,
+            'local_id': local_id,  # For tracking/deduplication
+            'web_order': True,  # Mark as API/web order
+            # Required numeric fields
+            'final_total': 0,
+            'tax': 0,
+            'subtotal': 0,
+            'remaining_due': 0,
+            'surcharge': 0,
+        }
 
         try:
-            response = requests.post(url, headers=headers, json=order_data)
-            response.raise_for_status()
-            return response.json()
+            # Step 1: Create the order
+            url = f"{self.base_url}/resources/Order/"
+            logger.info(f"Creating order in Revel (establishment={establishment}, local_id={local_id})")
+            response = requests.post(url, headers=headers, json=revel_order_data)
+            
+            if response.status_code not in [200, 201]:
+                logger.error(f"Failed to create order: {response.status_code}")
+                logger.error(f"Response: {response.text[:500]}")
+                return None
+            
+            created_order = response.json()
+            order_id = created_order.get('id')
+            order_uri = created_order.get('resource_uri')
+            logger.info(f"✅ Order created: ID={order_id}, URI={order_uri}")
+            
+            # Step 2: Add line items
+            items_url = f"{self.base_url}/resources/OrderItem/"
+            created_items = []
+            
+            for item in items:
+                item_uuid = str(uuid.uuid4())
+                item_data = {
+                    'uuid': item_uuid,
+                    'order': order_uri,
+                    'product': f"/resources/Product/{item.get('product_id')}/",
+                    'quantity': item.get('quantity', 1),
+                    'price': item.get('price', 0),
+                    'created_by': f'/enterprise/User/{self.default_user_id}/',
+                    'updated_by': f'/enterprise/User/{self.default_user_id}/',
+                    'station': f'/resources/PosStation/{self.default_pos_station_id}/',
+                    'created_date': now,
+                    'updated_date': now,
+                    # Required numeric fields
+                    'tax_amount': 0,
+                    'modifier_amount': 0,
+                    'temp_sort': 0,
+                    'tax_rate': 0,
+                    'dining_option': 0,
+                }
+                
+                logger.info(f"Adding item: product_id={item.get('product_id')}, qty={item.get('quantity')}")
+                item_response = requests.post(items_url, headers=headers, json=item_data)
+                
+                if item_response.status_code in [200, 201]:
+                    created_items.append(item_response.json())
+                    logger.info(f"  ✅ Item added: {item_response.json().get('id')}")
+                else:
+                    logger.error(f"  ❌ Failed to add item: {item_response.text[:200]}")
+            
+            # Return order with items
+            created_order['items'] = created_items
+            logger.info(f"Order {order_id} created with {len(created_items)}/{len(items)} items")
+            return created_order
+            
         except requests.RequestException as e:
             logger.error(f"Failed to create order: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"Response status: {e.response.status_code}")
+                logger.error(f"Response body: {e.response.text[:500]}")
             return None
 
     def _get_headers(self) -> Dict[str, str]:

@@ -36,9 +36,8 @@ def resolve_line_items(
         
         if product:
             product_id = product.get('id')
-            product_resource = f"/products/Product/{product_id}/"
             resolved_items.append({
-                'product': product_resource,
+                'product_id': product_id,
                 'quantity': quantity,
                 'price': product.get('price', 0)
             })
@@ -128,21 +127,12 @@ def inject_order(
     invoice_total = billing_invoice.get("total", 0) if billing_invoice else 0
     subtotal = billing_invoice.get("subtotal", 0) if billing_invoice else 0
 
-    # Get dining option
-    dining_option_id = get_dining_option_id(establishment)
-    if not dining_option_id:
-        logger.warning(f"[req-{correlation_id}] No dining option configured – using default")
-        dining_option_id = 1  # Fallback default
-
-    # Build order data with resolved items
+    # Build order data with resolved items - use new format expected by create_order()
     order_data = {
-        "establishment": f"/enterprise/Establishment/{establishment}/",
-        "external_order_id": external_order_id,
-        "dining_option": f"/resources/DiningOption/{dining_option_id}/",
-        "orderInfo": {
-            "notes": f"Triple Seat Event #{event_id}"
-        },
-        "items": resolved_items
+        "establishment": establishment,
+        "local_id": external_order_id,  # For idempotency/deduplication
+        "notes": f"Triple Seat Event #{event_id}",
+        "items": resolved_items  # List of {product_id, quantity, price}
     }
 
     logger.info(f"[req-{correlation_id}] [INJECTION] Creating order with {len(resolved_items)} items in establishment {establishment}")
