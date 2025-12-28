@@ -45,8 +45,10 @@ class RevelAPIClient:
             return self._product_cache[cache_key]
 
         url = f"{self.base_url}/resources/Product/"
+        # establishment must be a URI path for the API
+        establishment_uri = f"/enterprise/Establishment/{establishment}/"
         params = {
-            'establishment': establishment,
+            'establishment': establishment_uri,
             'limit': 1000  # Fetch all products
         }
         headers = self._get_headers()
@@ -112,8 +114,10 @@ class RevelAPIClient:
     def get_order(self, external_order_id: str, establishment: str) -> Optional[Dict[str, Any]]:
         """Check if order exists by local_id (external reference)."""
         url = f"{self.base_url}/resources/Order/"
+        # establishment must be a URI path for the API
+        establishment_uri = f"/enterprise/Establishment/{establishment}/"
         params = {
-            'establishment': establishment,
+            'establishment': establishment_uri,
             'local_id': external_order_id  # Use local_id for external references
         }
         headers = self._get_headers()
