@@ -188,3 +188,15 @@ def get_access_token() -> str:
             raise RuntimeError(f"OAuth client initialization failed: {e}")
     
     return _oauth_client.get_access_token()
+
+def clear_token_cache() -> None:
+    """Clear the cached OAuth token to force a fresh fetch.
+    
+    Use this after permissions have been updated on the TripleSeat OAuth app.
+    """
+    global _oauth_client
+    
+    if _oauth_client:
+        _oauth_client._access_token = None
+        _oauth_client._token_expires_at = None
+        logger.info("OAuth token cache cleared - next get_access_token() will fetch fresh token")
