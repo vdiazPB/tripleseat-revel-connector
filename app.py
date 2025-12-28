@@ -179,6 +179,55 @@ def oauth_callback(code: str, state: str | None = None):
     logger.info(f"[oauth-{correlation_id}] OAuth callback received - code: {code[:20]}..., state: {state}")
     return {"status": "received"}
 
+@app.get("/debug/oauth")
+def debug_oauth():
+    """Temporary debug endpoint for OAuth token fetch issues.
+    
+    Use this to diagnose why OAuth is returning HTML instead of JSON in Render.
+    Remove after debugging.
+    """
+    import requests
+    
+    client_id = os.getenv('TRIPLESEAT_OAUTH_CLIENT_ID')
+    client_secret = os.getenv('TRIPLESEAT_OAUTH_CLIENT_SECRET')
+    token_url = os.getenv('TRIPLESEAT_OAUTH_TOKEN_URL')
+    
+    result = {
+        "environment_vars": {
+            "client_id_set": bool(client_id),
+            "client_secret_set": bool(client_secret),
+            "token_url": token_url
+        }
+    }
+    
+    if client_id and client_secret and token_url:
+        try:
+            data = {
+                'grant_type': 'client_credentials',
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'scope': 'read write'
+            }
+            headers = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
+            }
+            
+            response = requests.post(token_url, data=data, headers=headers, timeout=30)
+            result["oauth_request"] = {
+                "status_code": response.status_code,
+                "content_type": response.headers.get('content-type'),
+                "is_html": 'text/html' in response.headers.get('content-type', '').lower(),
+                "is_json": 'application/json' in response.headers.get('content-type', '').lower(),
+                "response_preview": response.text[:300] if response.text else "empty"
+            }
+        except Exception as e:
+            result["oauth_request"] = {"error": str(e)}
+    else:
+        result["error"] = "Missing OAuth environment variables"
+    
+    return result
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
