@@ -166,6 +166,19 @@ def test_revel():
             "error": str(e)
         }
 
+@app.get("/oauth/callback")
+def oauth_callback(code: str, state: str | None = None):
+    """OAuth callback endpoint for TripleSeat OAuth redirects.
+    
+    Accepts authorization code from OAuth flow.
+    Logs receipt and returns success status.
+    No authentication required.
+    No business logic - minimal implementation.
+    """
+    correlation_id = str(uuid.uuid4())[:8]
+    logger.info(f"[oauth-{correlation_id}] OAuth callback received - code: {code[:20]}..., state: {state}")
+    return {"status": "received"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)

@@ -5,7 +5,7 @@ from integrations.tripleseat.api_client import TripleSeatAPIClient
 logger = logging.getLogger(__name__)
 
 def validate_event(event_id: str, correlation_id: str = None, skip_validation: bool = False) -> ValidationResult:
-    """Validate TripleSeat event using OAuth 1.0 API.
+    """Validate TripleSeat event using OAuth 2.0 API.
     
     Args:
         event_id: TripleSeat event ID
@@ -22,12 +22,8 @@ def validate_event(event_id: str, correlation_id: str = None, skip_validation: b
         logger.info(f"{req_id} Validation skipped - using webhook payload only")
         return ValidationResult(True, "WEBHOOK_PAYLOAD_MODE")
     
-    # Use OAuth 1.0 API for validation
+    # Use OAuth 2.0 API for validation
     client = TripleSeatAPIClient()
-    
-    if not client.oauth_session:
-        logger.error(f"{req_id} OAuth 1.0 not configured - cannot validate event {event_id}")
-        return ValidationResult(False, "OAUTH1_NOT_CONFIGURED")
     
     try:
         event, status = client.get_event_with_status(event_id)
@@ -42,7 +38,7 @@ def validate_event(event_id: str, correlation_id: str = None, skip_validation: b
             logger.warning(f"{req_id} Event {event_id} has status '{event_status}' - not definite/confirmed")
             return ValidationResult(False, f"INVALID_STATUS:{event_status}")
         
-        logger.info(f"{req_id} Event {event_id} validation successful via OAuth 1.0 API")
+        logger.info(f"{req_id} Event {event_id} validation successful via OAuth 2.0 API")
         return ValidationResult(True, "VALID")
     
     except Exception as e:
