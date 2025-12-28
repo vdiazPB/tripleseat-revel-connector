@@ -16,6 +16,7 @@ def parse_invoice_for_items(invoice_url: str, correlation_id: str = None) -> Lis
     """Fetch and parse TripleSeat invoice HTML to extract line items.
     
     Looks for table rows matching pattern: Qty Description Price Total
+    Extracts product name before the " - " delimiter (description separator)
     
     Returns:
         List of dicts with 'name' and 'quantity' keys
@@ -56,7 +57,7 @@ def parse_invoice_for_items(invoice_url: str, correlation_id: str = None) -> Lis
             if in_items_section and any(keyword in text.lower() for keyword in ['subtotal', 'food (', 'description percent']):
                 break
             
-            # Parse item rows: "8 ITEM NAME $price $total"
+            # Parse item rows: "8 ITEM NAME - DESCRIPTION $price $total"
             if in_items_section and text and '$' in text:
                 # Split by $ to isolate the description
                 parts = text.split('$')
@@ -67,11 +68,18 @@ def parse_invoice_for_items(invoice_url: str, correlation_id: str = None) -> Lis
                         qty_match = re.match(r'^(\d+)\s+(.+)', qty_and_name)
                         if qty_match:
                             qty = int(qty_match.group(1))
-                            name = qty_match.group(2).strip()
+                            full_name = qty_match.group(2).strip()
+                            
+                            # Extract product name before " - " separator
+                            # If there's a " - ", use text before it; otherwise use full name
+                            if ' - ' in full_name:
+                                name = full_name.split(' - ')[0].strip()
+                            else:
+                                name = full_name
                             
                             if name and qty > 0:
                                 items.append({'name': name, 'quantity': qty})
-                                logger.info(f"{req_id} Parsed item: {name} x{qty}")
+                                logger.info(f"{req_id} Parsed item: {name} x{qty} (full: {full_name})")
                     except Exception as e:
                         logger.warning(f"{req_id} Failed to parse item row: {text[:100]} - {e}")
         
