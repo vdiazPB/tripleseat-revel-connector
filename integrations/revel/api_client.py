@@ -309,6 +309,7 @@ class RevelAPIClient:
                 'subtotal': subtotal,  # Amount before discount
                 'discount_amount': discount_amount,  # Discount that was applied
                 'final_total': final_total,  # Amount after discount
+                'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',  # Ensure discount reference is set
                 'closed': True,  # Close the order so it appears in history
                 'printed': True,  # Mark as printed
             }
