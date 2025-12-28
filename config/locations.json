@@ -14,6 +14,11 @@
     "revel_establishment": "3",
     "timezone": "America/Los_Angeles"
   },
+  "4": {
+    "name": "Pinkbox Test Location",
+    "revel_establishment": "4",
+    "timezone": "America/Los_Angeles"
+  },
   "5": {
     "name": "Pinkbox Primm",
     "revel_establishment": "5",
@@ -65,8 +70,9 @@
     "timezone": "America/Los_Angeles"
   },
   "15691": {
-    "name": "Pinkbox Doughnuts (Catering/Test)",
-    "revel_establishment": "4",
-    "timezone": "America/Los_Angeles"
+    "name": "Pinkbox Special Events (Catering)",
+    "revel_establishment": "8",
+    "timezone": "America/Los_Angeles",
+    "test_establishment": "4"
   }
 }
