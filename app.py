@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Query
 import logging
 from integrations.tripleseat.webhook_handler import handle_tripleseat_webhook
 from integrations.revel.api_client import RevelAPIClient
@@ -167,17 +167,31 @@ def test_revel():
         }
 
 @app.get("/oauth/callback")
-def oauth_callback(code: str, state: str | None = None):
+def oauth_callback(code: str | None = Query(None), state: str | None = Query(None), error: str | None = Query(None)):
     """OAuth callback endpoint for TripleSeat OAuth redirects.
     
-    Accepts authorization code from OAuth flow.
-    Logs receipt and returns success status.
+    Accepts authorization code or error from OAuth flow.
+    Handles both success (code) and error (error) scenarios.
     No authentication required.
     No business logic - minimal implementation.
+    
+    Query Parameters:
+        code: Authorization code from OAuth provider (optional)
+        state: State parameter for CSRF protection (optional)
+        error: Error code if OAuth flow failed (optional)
     """
     correlation_id = str(uuid.uuid4())[:8]
-    logger.info(f"[oauth-{correlation_id}] OAuth callback received - code: {code[:20]}..., state: {state}")
-    return {"status": "received"}
+    
+    if error:
+        logger.warning(f"[oauth-{correlation_id}] OAuth callback received error - error: {error}")
+        return {"status": "error", "error": error}
+    
+    if code:
+        logger.info(f"[oauth-{correlation_id}] OAuth callback received - code: {code[:20]}..., state: {state}")
+        return {"status": "received", "code": code[:20] + "..."}
+    
+    logger.warning(f"[oauth-{correlation_id}] OAuth callback received without code or error")
+    return {"status": "invalid", "message": "No code or error in callback"}
 
 @app.get("/debug/oauth")
 def debug_oauth():
