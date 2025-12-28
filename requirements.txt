@@ -2,5 +2,6 @@ fastapi
 uvicorn
 sendgrid
 requests
+requests-oauthlib
 python-dotenv
 pytz

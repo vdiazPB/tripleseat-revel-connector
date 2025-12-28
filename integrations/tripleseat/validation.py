@@ -1,27 +1,50 @@
 import logging
 from integrations.tripleseat.models import ValidationResult
+from integrations.tripleseat.api_client import TripleSeatAPIClient
 
 logger = logging.getLogger(__name__)
 
-def validate_event(event_id: str, correlation_id: str = None) -> ValidationResult:
-    """Validate Triple Seat event for injection.
-    
-    NOTE: OAuth 2.0 API REMOVED - All API calls disabled.
-    This function returns False to force webhook-payload-only mode.
-    
-    Callers MUST use skip_validation=True parameter to process events.
-    All event data should come from webhook payloads.
+def validate_event(event_id: str, correlation_id: str = None, skip_validation: bool = False) -> ValidationResult:
+    """Validate TripleSeat event using OAuth 1.0 API.
     
     Args:
-        event_id: TripleSeat event ID (unused)
-        correlation_id: Request correlation ID for logging (unused)
+        event_id: TripleSeat event ID
+        correlation_id: Request correlation ID for logging
+        skip_validation: Skip API validation (use for webhook-only mode)
     
     Returns:
-        ValidationResult(is_valid=False) with message indicating API is disabled
+        ValidationResult with validation status
     """
-    if correlation_id:
-        logger.warning(f"[req-{correlation_id}] Event validation via API DISABLED - use webhook payload only")
-    else:
-        logger.warning("Event validation via API DISABLED - use webhook payload only")
+    req_id = f"[req-{correlation_id}]" if correlation_id else "[validation]"
     
-    return ValidationResult(False, "API_DISABLED_USE_WEBHOOK_PAYLOAD")
+    # Allow webhook-only mode
+    if skip_validation:
+        logger.info(f"{req_id} Validation skipped - using webhook payload only")
+        return ValidationResult(True, "WEBHOOK_PAYLOAD_MODE")
+    
+    # Use OAuth 1.0 API for validation
+    client = TripleSeatAPIClient()
+    
+    if not client.oauth_session:
+        logger.error(f"{req_id} OAuth 1.0 not configured - cannot validate event {event_id}")
+        return ValidationResult(False, "OAUTH1_NOT_CONFIGURED")
+    
+    try:
+        event, status = client.get_event_with_status(event_id)
+        
+        if event is None:
+            logger.warning(f"{req_id} Event {event_id} validation failed: {status}")
+            return ValidationResult(False, status)
+        
+        # Check event status
+        event_status = event.get('status', '').upper()
+        if event_status not in ['DEFINITE', 'CONFIRMED']:
+            logger.warning(f"{req_id} Event {event_id} has status '{event_status}' - not definite/confirmed")
+            return ValidationResult(False, f"INVALID_STATUS:{event_status}")
+        
+        logger.info(f"{req_id} Event {event_id} validation successful via OAuth 1.0 API")
+        return ValidationResult(True, "VALID")
+    
+    except Exception as e:
+        logger.error(f"{req_id} Event validation error: {e}")
+        return ValidationResult(False, "VALIDATION_ERROR")
