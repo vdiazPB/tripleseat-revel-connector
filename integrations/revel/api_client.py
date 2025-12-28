@@ -18,6 +18,7 @@ class RevelAPIClient:
             self.base_url = f"https://{self.domain}"
         else:
             self.base_url = f"https://{self.domain}.revelup.com"
+        logger.info(f"🔧 RevelAPIClient init - domain='{self.domain}', base_url='{self.base_url}'")
         # In-memory product cache (per request/instance)
         self._product_cache: Dict[str, Dict[str, Any]] = {}
         
@@ -63,6 +64,8 @@ class RevelAPIClient:
             return products
         except requests.RequestException as e:
             logger.error(f"Failed to fetch products for establishment {establishment}: {e}")
+            logger.error(f"  URL attempted: {url}")
+            logger.error(f"  Params: {params}")
             return []
 
     def resolve_product_by_name(self, establishment: str, product_name: str) -> Optional[Dict[str, Any]]:
@@ -126,6 +129,8 @@ class RevelAPIClient:
             return orders[0] if orders else None
         except requests.RequestException as e:
             logger.error(f"Failed to check order {external_order_id}: {e}")
+            logger.error(f"  URL attempted: {url}")
+            logger.error(f"  Params: {params}")
             return None
 
     def create_order(self, order_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
