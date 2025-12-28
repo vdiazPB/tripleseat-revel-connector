@@ -23,6 +23,7 @@ async def handle_tripleseat_webhook(request: Request):
 
     # Parse payload
     payload = await request.json()
+    logger.info("Payload parsed")
 
     # Extract event_id
     event = payload.get("event", {})
@@ -31,6 +32,9 @@ async def handle_tripleseat_webhook(request: Request):
     if not event_id:
         logger.error("No event_id in payload")
         return
+
+    site_id = event.get("site_id")
+    logger.info(f"Location resolved: {site_id}")
 
     logger.info(f"Processing Triple Seat event {event_id}")
 
@@ -44,8 +48,10 @@ async def handle_tripleseat_webhook(request: Request):
 
         # STEP 2: Time Gate
         time_gate_result = check_time_gate(event_id)
-        if time_gate_result != "PROCEED":
-            logger.info(f"Event {event_id} time gate: {time_gate_result}")
+        if time_gate_result == "PROCEED":
+            logger.info("Time gate: OPEN")
+        else:
+            logger.info(f"Time gate: CLOSED ({time_gate_result})")
             return  # Silent exit
 
         # STEP 3: Revel Injection

@@ -1,4 +1,5 @@
 import logging
+import os
 from integrations.revel.api_client import RevelAPIClient
 from integrations.revel.mappings import get_revel_establishment, get_dining_option_id, get_payment_type_id, get_discount_id
 from integrations.tripleseat.api_client import TripleSeatAPIClient
@@ -8,6 +9,11 @@ logger = logging.getLogger(__name__)
 
 def inject_order(event_id: str) -> InjectionResult:
     """Inject Triple Seat event into Revel POS."""
+    dry_run = os.getenv('DRY_RUN', 'false').lower() == 'true'
+    if dry_run:
+        logger.info("DRY RUN ENABLED – skipping Revel write")
+        return InjectionResult(True)  # Return success without writing
+
     external_order_id = f"tripleseat_event_{event_id}"
 
     # Get Triple Seat data
