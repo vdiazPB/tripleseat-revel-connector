@@ -7,7 +7,7 @@ from integrations.tripleseat.api_client import TripleSeatAPIClient
 
 logger = logging.getLogger(__name__)
 
-def check_time_gate(event_id: str) -> str:
+def check_time_gate(event_id: str, correlation_id: str = None) -> str:
     """Check if event is within injection time window."""
     client = TripleSeatAPIClient()
     event_data = client.get_event(event_id)

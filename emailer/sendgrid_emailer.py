@@ -7,7 +7,7 @@ from integrations.revel.mappings import get_revel_establishment
 
 logger = logging.getLogger(__name__)
 
-def send_success_email(event_id: str, order_details):
+def send_success_email(event_id: str, order_details, correlation_id: str = None):
     """Send success notification email."""
     try:
         sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
@@ -44,12 +44,12 @@ def send_success_email(event_id: str, order_details):
         )
 
         sg.send(message)
-        logger.info(f"Success email sent for event {event_id}")
+        logger.info(f"[req-{correlation_id}] Success email sent for event {event_id}")
 
     except Exception as e:
-        logger.error(f"Failed to send success email: {e}")
+        logger.error(f"[req-{correlation_id}] Failed to send success email: {e}")
 
-def send_failure_email(event_id: str, error_reason: str):
+def send_failure_email(event_id: str, error_reason: str, correlation_id: str = None):
     """Send failure notification email."""
     try:
         sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
@@ -73,7 +73,7 @@ def send_failure_email(event_id: str, error_reason: str):
         )
 
         sg.send(message)
-        logger.info(f"Failure email sent for event {event_id}")
+        logger.info(f"[req-{correlation_id}] Failure email sent for event {event_id}")
 
     except Exception as e:
-        logger.error(f"Failed to send failure email: {e}")
+        logger.error(f"[req-{correlation_id}] Failed to send failure email: {e}")

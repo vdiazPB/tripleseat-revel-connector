@@ -7,11 +7,11 @@ from integrations.tripleseat.models import InjectionResult, OrderDetails
 
 logger = logging.getLogger(__name__)
 
-def inject_order(event_id: str) -> InjectionResult:
+def inject_order(event_id: str, correlation_id: str = None) -> InjectionResult:
     """Inject Triple Seat event into Revel POS."""
     dry_run = os.getenv('DRY_RUN', 'false').lower() == 'true'
     if dry_run:
-        logger.info("DRY RUN ENABLED – skipping Revel write")
+        logger.info(f"[req-{correlation_id}] DRY RUN ENABLED – skipping Revel write")
         return InjectionResult(True)  # Return success without writing
 
     external_order_id = f"tripleseat_event_{event_id}"
@@ -35,7 +35,7 @@ def inject_order(event_id: str) -> InjectionResult:
     # Check idempotency
     existing_order = revel_client.get_order(external_order_id, establishment)
     if existing_order:
-        logger.info(f"Order {external_order_id} already exists")
+        logger.info(f"[req-{correlation_id}] Order {external_order_id} already exists")
         return InjectionResult(True)  # Exit safely
 
     # Get billing data

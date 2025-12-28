@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime
 import pytz
+import uuid
 
 # Load environment variables
 load_dotenv()
@@ -36,17 +37,29 @@ def health():
         "time": current_time
     }
 
-@app.post("/webhooks/tripleseat")
-async def tripleseat_webhook(request: Request):
-    logger.info("Webhook received")
+@app.post("/webhook")
+async def webhook(request: Request):
+    correlation_id = str(uuid.uuid4())[:8]
+    logger.info(f"[req-{correlation_id}] WEBHOOK INVOKED")
     try:
-        await handle_tripleseat_webhook(request)
-        logger.info("Webhook completed")
-        return {"status": "received"}
+        payload = await request.json()
+        result = await handle_tripleseat_webhook(payload, correlation_id)
+        return result
     except Exception as e:
-        logger.error(f"Webhook processing failed: {e}")
-        # Always return 200 OK as per spec
-        return {"status": "received"}
+        logger.error(f"[req-{correlation_id}] Webhook failed: {e}")
+        return {"error": str(e)}
+
+@app.post("/test/webhook")
+async def test_webhook(request: Request):
+    correlation_id = str(uuid.uuid4())[:8]
+    logger.info(f"[req-{correlation_id}] TEST WEBHOOK INVOKED")
+    try:
+        payload = await request.json()
+        result = await handle_tripleseat_webhook(payload, correlation_id)
+        return result
+    except Exception as e:
+        logger.error(f"[req-{correlation_id}] Test webhook failed: {e}")
+        return {"error": str(e)}
 
 @app.get("/test/revel")
 def test_revel():

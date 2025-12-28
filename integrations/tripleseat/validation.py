@@ -4,7 +4,7 @@ from integrations.tripleseat.api_client import TripleSeatAPIClient
 
 logger = logging.getLogger(__name__)
 
-def validate_event(event_id: str) -> ValidationResult:
+def validate_event(event_id: str, correlation_id: str = None) -> ValidationResult:
     """Validate Triple Seat event for injection."""
     client = TripleSeatAPIClient()
     event_data = client.get_event(event_id)
