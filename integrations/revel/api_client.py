@@ -175,6 +175,7 @@ class RevelAPIClient:
         
         # Build required fields for order creation
         # Using Triple Seat dining option (ID 113)
+        # NOTE: created_at and last_updated_at are actually PosStation URIs, not datetimes!
         revel_order_data = {
             'uuid': order_uuid,
             'establishment': f'/enterprise/Establishment/{establishment}/',
@@ -182,9 +183,6 @@ class RevelAPIClient:
             'notes': notes,
             'local_id': local_id,  # For tracking/deduplication
             'web_order': True,  # Mark as API/web order
-            # Timestamps - created_at appears to be a relational field, try null for now
-            'created_at': None,
-            'last_updated_at': None,
             'created_date': now_iso,
             'updated_date': now_iso,
             # Users
@@ -192,6 +190,8 @@ class RevelAPIClient:
             'updated_by': f'/enterprise/User/{self.default_user_id}/',
             # Station/Dining
             'station': f'/resources/PosStation/{self.default_pos_station_id}/',
+            'created_at': f'/resources/PosStation/{self.default_pos_station_id}/',  # POS Station URI
+            'last_updated_at': f'/resources/PosStation/{self.default_pos_station_id}/',  # POS Station URI
             'dining_option': self.tripleseat_dining_option_id,
             # Financial fields (all zero for now)
             'final_total': 0,
@@ -225,12 +225,17 @@ class RevelAPIClient:
             
             for item in items:
                 item_uuid = str(uuid.uuid4())
+                ts_price = float(item.get('price', 0))  # Triple Seat price per unit
+                
                 item_data = {
                     'uuid': item_uuid,
                     'order': order_uri,
                     'product': f"/resources/Product/{item.get('product_id')}/",
                     'quantity': item.get('quantity', 1),
-                    'price': item.get('price', 0),
+                    # Triple Seat price override - these fields ensure the TS price is used, not the product's default price
+                    'price': ts_price,  # Unit price from Triple Seat
+                    'initial_price': ts_price,  # Initial/base price for this item
+                    'price_to_display': ts_price,  # Display price (override Revel product price)
                     'created_by': f'/enterprise/User/{self.default_user_id}/',
                     'updated_by': f'/enterprise/User/{self.default_user_id}/',
                     'station': f'/resources/PosStation/{self.default_pos_station_id}/',
@@ -270,6 +275,11 @@ class RevelAPIClient:
                 else:
                     logger.warning(f"  ⚠️ Failed to apply payment (order still created)")
             
+            # Step 5: Finalize order - set totals and close it so it appears in UI
+            finalize_success = self._finalize_order(order_uri, payment_amount, headers)
+            if finalize_success:
+                logger.info(f"  ✅ Order finalized and closed (will appear in Revel UI)")
+            
             # Return order with items
             created_order['items'] = created_items
             logger.info(f"Order {order_id} created with {len(created_items)}/{len(items)} items")
@@ -282,109 +292,34 @@ class RevelAPIClient:
                 logger.error(f"Response body: {e.response.text[:500]}")
             return None
 
-    def create_order_via_weborders(self, order_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Create order using WebOrders API (ValidateCart → CalculateCart → SubmitCart).
+    def _finalize_order(self, order_uri: str, final_total: float, headers: Dict[str, str]) -> bool:
+        """Finalize an order by setting totals and closing it.
         
-        This is the recommended approach for API-created orders as it handles
-        all field validation and calculation automatically.
-        
-        Args:
-            order_data: Dict containing:
-                - establishment: Revel establishment ID
-                - notes: Order notes
-                - local_id: External reference ID
-                - items: List of {product_id, quantity, price}
-                - discount_amount: Optional discount amount
-        
-        Returns:
-            Created order dict or None on failure
+        This makes the order visible in the Revel UI Order History.
         """
-        establishment = order_data.get('establishment')
-        local_id = order_data.get('local_id', '')
-        notes = order_data.get('notes', '')
-        items = order_data.get('items', [])
-        discount_amount = order_data.get('discount_amount', 0)
-        
-        headers = self._get_headers()
-        
         try:
-            # Build cart items list
-            cart_items = []
-            for item in items:
-                cart_item = {
-                    'product': int(item.get('product_id')),
-                    'quantity': int(item.get('quantity', 1)),
-                    'price': float(item.get('price', 0)),
-                }
-                cart_items.append(cart_item)
+            url = f"{self.base_url}{order_uri}"
             
-            # Build cart object
-            cart = {
-                'establishment_id': int(establishment),  # Try as establishment_id field
-                'items': cart_items,
-                'note': notes,
-                'external_id': local_id,  # For deduplication
+            finalize_data = {
+                'final_total': final_total,
+                'subtotal': final_total,  # For simplicity, subtotal = final_total (no tax applied)
+                'closed': True,  # Close the order so it appears in history
+                'printed': True,  # Mark as printed
             }
             
-            # Step 1: ValidateCart
-            validate_url = f"{self.base_url}/specialresources/cart/validate"
-            logger.info(f"WebOrders: Validating cart for establishment {establishment}")
-            logger.debug(f"Cart data: {cart}")
-            logger.debug(f"Headers: {headers}")
-            logger.debug(f"Full URL: {validate_url}")
+            logger.debug(f"Finalizing order - setting totals and closed flag")
+            response = requests.patch(url, headers=headers, json=finalize_data)
             
-            validate_response = requests.post(validate_url, headers=headers, json=cart)
-            logger.debug(f"ValidateCart Response Status: {validate_response.status_code}")
-            logger.debug(f"ValidateCart Response: {validate_response.text[:500]}")
-            
-            if validate_response.status_code not in [200, 201]:
-                logger.error(f"Cart validation failed: {validate_response.status_code}")
-                logger.error(f"Response: {validate_response.text[:500]}")
-                return None
-            
-            validated_cart = validate_response.json()
-            logger.info(f"✅ Cart validated")
-            
-            # Step 2: CalculateCart
-            calculate_url = f"{self.base_url}/specialresources/cart/calculate"
-            logger.info(f"WebOrders: Calculating cart totals")
-            
-            calculate_response = requests.post(calculate_url, headers=headers, json=validated_cart)
-            if calculate_response.status_code not in [200, 201]:
-                logger.error(f"Cart calculation failed: {calculate_response.status_code}")
-                logger.error(f"Response: {calculate_response.text[:500]}")
-                return None
-            
-            calculated_cart = calculate_response.json()
-            logger.info(f"✅ Cart totals calculated")
-            
-            # Apply discount if provided
-            if discount_amount and discount_amount > 0:
-                calculated_cart['discount'] = float(discount_amount)
-                logger.info(f"Applied discount: ${discount_amount}")
-            
-            # Step 3: SubmitCart
-            submit_url = f"{self.base_url}/specialresources/cart/submit"
-            logger.info(f"WebOrders: Submitting cart to create order")
-            
-            submit_response = requests.post(submit_url, headers=headers, json=calculated_cart)
-            if submit_response.status_code not in [200, 201]:
-                logger.error(f"Cart submission failed: {submit_response.status_code}")
-                logger.error(f"Response: {submit_response.text[:500]}")
-                return None
-            
-            created_order = submit_response.json()
-            order_id = created_order.get('id') or created_order.get('order_id')
-            logger.info(f"✅ Order created via WebOrders: ID={order_id}")
-            
-            return created_order
-            
-        except requests.RequestException as e:
-            logger.error(f"WebOrders API error: {e}")
-            return None
+            if response.status_code in [200, 202]:
+                logger.debug(f"✅ Order finalized successfully")
+                return True
+            else:
+                logger.error(f"Failed to finalize order: HTTP {response.status_code}")
+                logger.error(f"Response: {response.text[:500]}")
+                return False
         except Exception as e:
-            logger.error(f"Failed to create order via WebOrders: {e}")
-            return None
+            logger.error(f"Failed to finalize order: {e}")
+            return False
 
     def open_order(self, order_id: str) -> bool:
         """Open/activate an order so it appears in Revel UI.
