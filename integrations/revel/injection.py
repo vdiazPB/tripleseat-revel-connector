@@ -52,6 +52,7 @@ def inject_order(
     event_id: str,
     correlation_id: str = None,
     dry_run: bool = True,
+    enable_connector: bool = True,
     test_location_override: bool = False,
     test_establishment_id: str = "4",
     webhook_payload: Dict[str, Any] = None
@@ -60,16 +61,12 @@ def inject_order(
     
     external_order_id = f"tripleseat_event_{event_id}"
 
-    # Get event data - from webhook payload in test mode, otherwise from API
-    if test_location_override and webhook_payload:
-        logger.info(f"[req-{correlation_id}] [TEST MODE] Using webhook payload directly (skipping API)")
-        event_data = webhook_payload
-    else:
-        ts_client = TripleSeatAPIClient()
-        event_data = ts_client.get_event(event_id)
-        if not event_data:
-            logger.error(f"[req-{correlation_id}] Failed to fetch event data for event_id={event_id}")
-            return InjectionResult(False, error="Failed to fetch event data")
+    # Get event data from TripleSeat API
+    ts_client = TripleSeatAPIClient()
+    event_data = ts_client.get_event(event_id)
+    if not event_data:
+        logger.error(f"[req-{correlation_id}] Failed to fetch event data for event_id={event_id}")
+        return InjectionResult(False, error="Failed to fetch event data")
 
     event = event_data.get("event", {})
     site_id = event.get("site_id")
@@ -77,7 +74,7 @@ def inject_order(
     # Determine establishment (TEST MODE OVERRIDE)
     if test_location_override:
         establishment = test_establishment_id
-        logger.warning(f"[req-{correlation_id}] [TEST MODE] Location override ACTIVE – using establishment {establishment} (ignoring site_id={site_id})")
+        logger.warning(f"[req-{correlation_id}] Location override ACTIVE – using establishment {establishment} (ignoring site_id={site_id})")
     else:
         establishment = get_revel_establishment(site_id)
         if not establishment:
@@ -109,6 +106,11 @@ def inject_order(
     resolved_items = resolve_line_items(revel_client, establishment, tripleseat_items, correlation_id)
     
     logger.info(f"[req-{correlation_id}] Resolved {len(resolved_items)}/{len(tripleseat_items)} items to Revel products")
+
+    # ENABLE_CONNECTOR safety check
+    if not enable_connector:
+        logger.warning(f"[req-{correlation_id}] CONNECTOR DISABLED – blocking Revel write")
+        return InjectionResult(True, error="CONNECTOR_DISABLED")
 
     # DRY RUN check - after resolution so we can see what would be injected
     if dry_run:

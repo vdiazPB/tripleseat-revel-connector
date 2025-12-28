@@ -22,7 +22,7 @@ All environment variables must be set in Render dashboard under **Settings > Env
 
 | Variable | Type | Default | Purpose | Example |
 |----------|------|---------|---------|---------|
-| `DRY_RUN` | boolean | `true` | Enable/disable Revel write operations | `true` \| `false` |
+| `DRY_RUN` | boolean | `false` | Enable/disable Revel write operations | `true` \| `false` |
 | `ENABLE_CONNECTOR` | boolean | `true` | Global kill switch for all webhook processing | `true` \| `false` |
 | `ALLOWED_LOCATIONS` | csv | EMPTY | Comma-separated site IDs to process (empty = all) | `1,2,5` |
 
@@ -216,7 +216,7 @@ TIMEZONE=?                      # Must be valid timezone
 TRIPLESEAT_API_KEY=?            # Must start with ts_
 REVEL_API_KEY=?                 # Must be set
 SENDGRID_API_KEY=?              # Must start with SG.
-DRY_RUN=true                    # Safe default
+DRY_RUN=false                   # Production writes enabled
 ENABLE_CONNECTOR=true           # Normal operation
 ALLOWED_LOCATIONS=<empty>       # Unrestricted initially
 ```

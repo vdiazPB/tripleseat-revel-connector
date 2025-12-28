@@ -20,7 +20,7 @@ app = FastAPI(title="TripleSeat-Revel Connector")
 # Startup logging & production safety flags
 env = os.getenv('ENV', 'development')
 timezone = os.getenv('TIMEZONE', 'UTC')
-dry_run = os.getenv('DRY_RUN', 'true').lower() == 'true'  # Default to true for safety
+dry_run = os.getenv('DRY_RUN', 'false').lower() == 'true'  # Default to false for production
 enable_connector = os.getenv('ENABLE_CONNECTOR', 'true').lower() == 'true'
 allowed_locations = os.getenv('ALLOWED_LOCATIONS', '').split(',') if os.getenv('ALLOWED_LOCATIONS') else []
 
@@ -63,6 +63,7 @@ async def webhook(request: Request):
             payload, 
             correlation_id, 
             dry_run=dry_run,
+            enable_connector=enable_connector,
             allowed_locations=allowed_locations,
             test_location_override=test_location_override,
             test_establishment_id=test_establishment_id
@@ -88,6 +89,7 @@ async def test_webhook(request: Request):
             payload, 
             correlation_id,
             dry_run=dry_run,
+            enable_connector=enable_connector,
             allowed_locations=allowed_locations,
             test_location_override=test_location_override,
             test_establishment_id=test_establishment_id
@@ -116,3 +118,7 @@ def test_revel():
             "status": 500,
             "error": str(e)
         }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
