@@ -3,6 +3,7 @@ import os
 from typing import Dict, Any, Optional
 from enum import Enum
 import requests
+from requests_oauthlib import OAuth1Session
 
 logger = logging.getLogger(__name__)
 
@@ -50,58 +51,38 @@ def safe_json(response: requests.Response, request_id: str = None) -> Optional[D
         return None
 
 class TripleSeatAPIClient:
-    """TripleSeat API Client - OAuth 2.0 Bearer Token Implementation.
+    """TripleSeat API Client - OAuth 1.0 Implementation.
     
-    Uses OAuth 2.0 client credentials flow for Bearer token authentication.
+    Uses OAuth 1.0 (3-legged authentication) for secure API access.
     """
     
     def __init__(self):
         self.base_url = os.getenv('TRIPLESEAT_API_BASE', 'https://api.tripleseat.com')
-        self.client_id = os.getenv('TRIPLESEAT_OAUTH_CLIENT_ID', '').strip()
-        self.client_secret = os.getenv('TRIPLESEAT_OAUTH_CLIENT_SECRET', '').strip()
-        self.token_url = os.getenv('TRIPLESEAT_OAUTH_TOKEN_URL', '').strip()
+        self.consumer_key = os.getenv('CONSUMER_KEY', '').strip()
+        self.consumer_secret = os.getenv('CONSUMER_SECRET', '').strip()
+        self.access_token = os.getenv('TRIPLESEAT_OAUTH_TOKEN', '').strip()
+        self.access_token_secret = os.getenv('TRIPLESEAT_OAUTH_TOKEN_SECRET', '').strip()
         
-        self.access_token = None
-        self.session = requests.Session()
-        
-        # Fetch OAuth 2.0 access token
-        if not all([self.client_id, self.client_secret, self.token_url]):
-            logger.error("❌ OAuth 2.0 credentials missing: CLIENT_ID, CLIENT_SECRET, or TOKEN_URL")
+        # Validate OAuth 1.0 credentials
+        if not all([self.consumer_key, self.consumer_secret]):
+            logger.error("❌ OAuth 1.0 credentials missing: CONSUMER_KEY or CONSUMER_SECRET")
+            self.oauth_session = None
         else:
             try:
-                self._fetch_access_token()
-                logger.info("✅ TripleSeatAPIClient initialized with OAuth 2.0 Bearer token")
+                self.oauth_session = OAuth1Session(
+                    client_key=self.consumer_key,
+                    client_secret=self.consumer_secret,
+                    resource_owner_key=self.access_token or '',
+                    resource_owner_secret=self.access_token_secret or '',
+                    signature_type='AUTH_HEADER'
+                )
+                logger.info("✅ TripleSeatAPIClient initialized with OAuth 1.0")
             except Exception as e:
-                logger.error(f"❌ Failed to initialize OAuth 2.0: {e}")
-                self.access_token = None
-
-    def _fetch_access_token(self):
-        """Fetch OAuth 2.0 access token using client credentials."""
-        data = {
-            'grant_type': 'client_credentials',
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-            'scope': 'v1_access'  # Based on .env SCOPES
-        }
-        
-        response = requests.post(self.token_url, data=data, timeout=10)
-        response.raise_for_status()
-        
-        token_data = response.json()
-        self.access_token = token_data.get('access_token')
-        
-        if not self.access_token:
-            raise ValueError("No access_token in OAuth 2.0 response")
-        
-        # Set default headers for session
-        self.session.headers.update({
-            'Authorization': f'Bearer {self.access_token}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        })
+                logger.error(f"❌ Failed to initialize OAuth 1.0: {e}")
+                self.oauth_session = None
 
     def get_event(self, event_id: str) -> Optional[Dict[str, Any]]:
-        """Fetch event details from TripleSeat API using OAuth 2.0.
+        """Fetch event details from TripleSeat API using OAuth 1.0.
         
         Args:
             event_id: TripleSeat event ID
@@ -109,18 +90,18 @@ class TripleSeatAPIClient:
         Returns:
             Event dictionary or None if API call fails
         """
-        if not self.access_token:
-            logger.error("[get_event] OAuth 2.0 token not available")
+        if not self.oauth_session:
+            logger.error("[get_event] OAuth 1.0 session not initialized")
             return None
             
         try:
             url = f"{self.base_url}/v2/events/{event_id}"
-            response = self.session.get(url, timeout=10)
+            response = self.oauth_session.get(url, timeout=10)
             response.raise_for_status()
             
             data = safe_json(response)
             if data:
-                logger.info(f"✅ [get_event] Retrieved event {event_id} via OAuth 2.0")
+                logger.info(f"✅ [get_event] Retrieved event {event_id} via OAuth 1.0")
                 return data.get('event')
             return None
         except requests.exceptions.HTTPError as e:
@@ -128,7 +109,7 @@ class TripleSeatAPIClient:
                 logger.warning(f"[get_event] Event {event_id} not found (404)")
                 return None
             elif e.response.status_code == 401:
-                logger.error(f"[get_event] OAuth 2.0 authentication failed (401)")
+                logger.error(f"[get_event] OAuth 1.0 authentication failed (401)")
                 return None
             logger.error(f"[get_event] HTTP error: {e.response.status_code} - {e}")
             return None
@@ -145,15 +126,15 @@ class TripleSeatAPIClient:
         Returns:
             Tuple of (event_dict, status_code) or (None, failure_type)
         """
-        if not self.access_token:
-            logger.error("[get_event_with_status] OAuth 2.0 token not available")
+        if not self.oauth_session:
+            logger.error("[get_event_with_status] OAuth 1.0 session not initialized")
             return None, TripleSeatFailureType.AUTHORIZATION_DENIED
             
         try:
             url = f"{self.base_url}/v2/events/{event_id}"
             logger.info(f"[get_event_with_status] Requesting: {url}")
             
-            response = self.session.get(url, timeout=10)
+            response = self.oauth_session.get(url, timeout=10)
             
             # Log response details
             body_preview = response.text[:300] if response.text else "empty"
@@ -163,7 +144,7 @@ class TripleSeatAPIClient:
                 logger.warning(f"[get_event_with_status] Event {event_id} not found")
                 return None, TripleSeatFailureType.RESOURCE_NOT_FOUND
             elif response.status_code == 401:
-                logger.error(f"[get_event_with_status] OAuth 2.0 authentication failed (401)")
+                logger.error(f"[get_event_with_status] OAuth 1.0 authentication failed (401)")
                 return None, TripleSeatFailureType.AUTHORIZATION_DENIED
             elif response.status_code != 200:
                 logger.error(f"[get_event_with_status] HTTP {response.status_code}: {body_preview}")
@@ -186,22 +167,22 @@ class TripleSeatAPIClient:
             return None, TripleSeatFailureType.API_ERROR
 
     def check_tripleseat_access(self) -> bool:
-        """Check if OAuth 2.0 credentials are valid."""
-        if not self.access_token:
-            logger.error("[check_tripleseat_access] OAuth 2.0 token not available")
+        """Check if OAuth 1.0 credentials are valid."""
+        if not self.oauth_session:
+            logger.error("[check_tripleseat_access] OAuth 1.0 session not initialized")
             return False
             
         try:
             # Try a simple API call to verify auth
             url = f"{self.base_url}/v2/events"
-            response = self.session.get(url, timeout=10, params={'limit': 1})
+            response = self.oauth_session.get(url, timeout=10, params={'limit': 1})
             is_valid = response.status_code == 200
             
             if is_valid:
-                logger.info("✅ [check_tripleseat_access] OAuth 2.0 credentials valid")
+                logger.info("✅ [check_tripleseat_access] OAuth 1.0 credentials valid")
             else:
-                logger.warning(f"[check_tripleseat_access] OAuth 2.0 check failed: {response.status_code}")
+                logger.warning(f"[check_tripleseat_access] OAuth 1.0 check failed: {response.status_code}")
             return is_valid
         except Exception as e:
-            logger.error(f"[check_tripleseat_access] OAuth 2.0 validation error: {e}")
+            logger.error(f"[check_tripleseat_access] OAuth 1.0 validation error: {e}")
             return False
