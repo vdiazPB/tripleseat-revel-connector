@@ -1,0 +1,14 @@
+{
+  "webhook_trigger_type": "STATUS_CHANGE_EVENT",
+  "event": {
+    "id": 55521609,
+    "name": "Jon Ponder",
+    "event_date": "12/28/2025",
+    "event_date_iso8601": "2025-12-28",
+    "status": "DEFINITE",
+    "site_id": 15691,
+    "event_start": "12/28/2025 6:00 PM",
+    "event_end": "12/28/2025 6:15 PM",
+    "updated_at": "12/28/2025 12:56 PM"
+  }
+}
