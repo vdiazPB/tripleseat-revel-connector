@@ -10,7 +10,17 @@ from emailer.sendgrid_emailer import send_success_email, send_failure_email
 
 logger = logging.getLogger(__name__)
 
-async def handle_tripleseat_webhook(payload: dict, correlation_id: str, verify_signature_flag: bool = True):
+# In-memory idempotency cache (site_id + event_id + triggered_at)
+# Production systems should use Redis or similar for distributed idempotency
+idempotency_cache = {}
+
+async def handle_tripleseat_webhook(
+    payload: dict, 
+    correlation_id: str, 
+    verify_signature_flag: bool = True,
+    dry_run: bool = True,
+    allowed_locations: list = None
+):
     """Handle incoming Triple Seat webhook."""
     logger.info(f"[req-{correlation_id}] Webhook received")
     logger.info(f"[req-{correlation_id}] Payload parsed")
@@ -19,6 +29,7 @@ async def handle_tripleseat_webhook(payload: dict, correlation_id: str, verify_s
     event = payload.get("event", {})
     event_id = event.get("id")
     site_id = event.get("site_id")
+    triggered_at = event.get("triggered_at", "")  # For idempotency
 
     # Defensive validation
     if not site_id:
@@ -27,11 +38,37 @@ async def handle_tripleseat_webhook(payload: dict, correlation_id: str, verify_s
 
     logger.info(f"[req-{correlation_id}] Location resolved: {site_id}")
 
+    # Idempotency check
+    if event_id and triggered_at:
+        idempotency_key = f"{site_id}:{event_id}:{triggered_at}"
+        if idempotency_key in idempotency_cache:
+            logger.info(f"[req-{correlation_id}] Duplicate event detected (idempotency): {idempotency_key}")
+            return {
+                "ok": True,
+                "acknowledged": True,
+                "reason": "DUPLICATE_EVENT",
+                "site_id": site_id,
+                "dry_run": dry_run
+            }
+
+    # ALLOWED_LOCATIONS safety lock
+    if allowed_locations and allowed_locations[0]:  # If configured
+        allowed_locations_clean = [loc.strip() for loc in allowed_locations]
+        if str(site_id) not in allowed_locations_clean:
+            logger.warning(f"[req-{correlation_id}] Site {site_id} NOT in ALLOWED_LOCATIONS: {allowed_locations_clean}")
+            return {
+                "ok": True,
+                "acknowledged": True,
+                "reason": "LOCATION_NOT_ALLOWED",
+                "site_id": site_id,
+                "dry_run": dry_run
+            }
+
     if not event_id:
         logger.error(f"[req-{correlation_id}] No event_id in payload")
         return {
             "ok": False,
-            "dry_run": os.getenv('DRY_RUN', 'false').lower() == 'true',
+            "dry_run": dry_run,
             "site_id": site_id,
             "time_gate": "UNKNOWN"
         }
@@ -44,7 +81,7 @@ async def handle_tripleseat_webhook(payload: dict, correlation_id: str, verify_s
             logger.info(f"[req-{correlation_id}] Event {event_id} failed validation: {validation_result.reason}")
             return {
                 "ok": False,
-                "dry_run": os.getenv('DRY_RUN', 'false').lower() == 'true',
+                "dry_run": dry_run,
                 "site_id": site_id,
                 "time_gate": "UNKNOWN"
             }
@@ -59,19 +96,19 @@ async def handle_tripleseat_webhook(payload: dict, correlation_id: str, verify_s
             time_gate_status = "CLOSED"
             return {
                 "ok": True,
-                "dry_run": os.getenv('DRY_RUN', 'false').lower() == 'true',
+                "dry_run": dry_run,
                 "site_id": site_id,
                 "time_gate": time_gate_status
             }
 
         # STEP 3: Revel Injection
-        injection_result = inject_order(event_id, correlation_id)
+        injection_result = inject_order(event_id, correlation_id, dry_run=dry_run)
         if not injection_result.success:
             logger.error(f"[req-{correlation_id}] Event {event_id} injection failed: {injection_result.error}")
             send_failure_email(event_id, injection_result.error, correlation_id)
             return {
                 "ok": False,
-                "dry_run": os.getenv('DRY_RUN', 'false').lower() == 'true',
+                "dry_run": dry_run,
                 "site_id": site_id,
                 "time_gate": time_gate_status
             }
@@ -79,11 +116,17 @@ async def handle_tripleseat_webhook(payload: dict, correlation_id: str, verify_s
         # STEP 4: Success Email
         send_success_email(event_id, injection_result.order_details, correlation_id)
 
+        # Register idempotency on success
+        if event_id and triggered_at:
+            idempotency_key = f"{site_id}:{event_id}:{triggered_at}"
+            idempotency_cache[idempotency_key] = True
+            logger.info(f"[req-{correlation_id}] Idempotency registered: {idempotency_key}")
+
         logger.info(f"[req-{correlation_id}] Webhook completed")
 
         return {
             "ok": True,
-            "dry_run": os.getenv('DRY_RUN', 'false').lower() == 'true',
+            "dry_run": dry_run,
             "site_id": site_id,
             "time_gate": time_gate_status
         }
@@ -93,7 +136,7 @@ async def handle_tripleseat_webhook(payload: dict, correlation_id: str, verify_s
         send_failure_email(event_id, str(e), correlation_id)
         return {
             "ok": False,
-            "dry_run": os.getenv('DRY_RUN', 'false').lower() == 'true',
+            "dry_run": dry_run,
             "site_id": site_id,
             "time_gate": "UNKNOWN"
         }

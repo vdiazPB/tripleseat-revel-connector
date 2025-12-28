@@ -7,9 +7,8 @@ from integrations.tripleseat.models import InjectionResult, OrderDetails
 
 logger = logging.getLogger(__name__)
 
-def inject_order(event_id: str, correlation_id: str = None) -> InjectionResult:
+def inject_order(event_id: str, correlation_id: str = None, dry_run: bool = True) -> InjectionResult:
     """Inject Triple Seat event into Revel POS."""
-    dry_run = os.getenv('DRY_RUN', 'false').lower() == 'true'
     if dry_run:
         logger.info(f"[req-{correlation_id}] DRY RUN ENABLED – skipping Revel write")
         return InjectionResult(True)  # Return success without writing

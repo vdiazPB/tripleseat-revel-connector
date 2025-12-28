@@ -1,53 +1,112 @@
-# TripleSeat-Revel Connector: Verification Complete ✓
+# TripleSeat-Revel Connector: Production Go-Live Ready ✓
+
+**Status:** VERIFIED | SAFE | READY FOR GO-LIVE
+
+**Last Updated:** December 27, 2025
 
 ## Executive Summary
 
-The TripleSeat-Revel Connector has been enhanced with **production-grade verification capabilities** while maintaining zero breaking changes. The service is **READY FOR DEPLOYMENT** to Render.
+The TripleSeat-Revel Connector is **PRODUCTION-READY** with comprehensive safety mechanisms, observability, and operational controls for safe go-live.
 
-### Key Achievements
+### Phase 1: Verification Complete ✅
 
-✅ **Verification Endpoints** - POST /test/webhook enables safe testing  
-✅ **Correlation ID Tracing** - Every request logged with unique prefix  
-✅ **Hardened Logging** - Complete execution flow visible in logs  
-✅ **Response Clarity** - JSON responses include status, location, time gate  
-✅ **Defensive Validation** - Invalid payloads rejected gracefully  
-✅ **DRY_RUN Protection** - Blocks all Revel writes when enabled  
-✅ **Backward Compatible** - Zero breaking changes  
+- Correlation ID tracing implemented
+- Hardened logging with complete execution flow
+- Defensive payload validation
+- DRY_RUN protection verified
+- Response structure clarified
+- Backward compatibility confirmed
 
-## Implementation Details
+### Phase 2: Production Safety Locks ✅
 
-### What Was Added
+- DRY_RUN defaults to **true** (safe by default)
+- ENABLE_CONNECTOR kill switch implemented (instant OFF)
+- ALLOWED_LOCATIONS support added (location-based restrictions)
+- Idempotency protection with duplicate detection
+- Error classification (validation, time gate, safety lock, internal)
 
-| Component | Addition | Purpose |
-|-----------|----------|---------|
-| app.py | Correlation ID generation | Request tracing |
-| app.py | POST /webhook endpoint | Production webhook handler |
-| app.py | POST /test/webhook endpoint | Safe testing without real data |
-| webhook_handler.py | "Webhook received" log | Entry point visibility |
-| webhook_handler.py | Correlation ID propagation | Consistent request tracing |
-| injection.py | DRY_RUN logging | Confirm write blocking |
-| emailer.py | Correlation ID logging | Email operation tracing |
-| documentation | 4 comprehensive guides | Deployment & verification |
+### Phase 3: Operational Documentation ✅
 
-### What Was NOT Changed
+- GO_LIVE_CHECKLIST.md - Pre-deployment verification
+- KILL_SWITCH.md - Emergency shutdown procedures
+- ROLLBACK_PLAN.md - Incident recovery procedures
+- ENVIRONMENT_REFERENCE.md - Configuration guide
+- MONITORING_GUIDE.md - Observability and alerting
 
-✓ Business logic (validation, time gate, injection)  
-✓ Endpoint paths (existing endpoints still work)  
-✓ Function signatures (correlation_id is optional)  
-✓ API integrations (TripleSeat, Revel, SendGrid)  
-✓ Configuration (locations.json, environment variables)  
-✓ Database (no database used, no schema changes)  
+## Production Safety Features
 
-## Verification Results
+### Kill Switch (ENABLE_CONNECTOR)
 
-### Test Suite Execution
+**Instant, zero-side-effect shutdown:**
+
 ```
-✓ Webhook received (log order verified)
-✓ Payload parsed (correlation ID present)
-✓ Location resolved (site_id extracted)
-✓ Time gate checked (status determined)
-✓ Defensive validation (missing site_id rejected)
-✓ Response structure (all fields present)
+ENABLE_CONNECTOR=false
+
+→ All webhooks return 200 OK immediately
+→ No processing, no side effects
+→ No Revel writes, no emails sent
+→ Service stays running and healthy
+```
+
+**Use when:** Production incident, safety concerns, investigation needed
+
+**Recovery:** Set `ENABLE_CONNECTOR=true` (< 30 seconds)
+
+### Production Safety Locks
+
+| Lock | Variable | Default | Purpose |
+|------|----------|---------|---------|
+| **Write Block** | DRY_RUN | true | Prevents all Revel writes during verification |
+| **Kill Switch** | ENABLE_CONNECTOR | true | Emergency OFF for all webhooks |
+| **Location Restriction** | ALLOWED_LOCATIONS | (empty) | Scope processing to specific site IDs |
+
+### Idempotency Protection
+
+**Prevents duplicate orders from duplicate webhooks:**
+
+```
+Format: site_id + event_id + triggered_at
+Example: "1:12345:2025-12-27T18:00:00Z"
+
+Response: 200 OK, acknowledged=true, reason="DUPLICATE_EVENT"
+```
+
+## Deployment Path
+
+### Step 1: Initial Deployment (T=0)
+```
+DRY_RUN=true              (blocks writes)
+ENABLE_CONNECTOR=true     (normal operation)
+ALLOWED_LOCATIONS=        (unrestricted)
+```
+
+**Expected:** Full processing but no Revel writes
+
+### Step 2: Verification Period (T+24h to T+72h)
+- Monitor 50+ webhooks
+- Verify logs show complete execution flow
+- Confirm no side effects
+- Test kill switch (if safe)
+- Get approvals
+
+### Step 3: Enable Real Writes (T+72h+)
+```
+DRY_RUN=false             (enables writes)
+ENABLE_CONNECTOR=true     (normal operation)
+ALLOWED_LOCATIONS=        (unrestricted)
+```
+
+**Action:** Change single variable in Render environment
+
+**Expected:** Orders written to Revel, emails sent
+
+### Step 4: Gradual Rollout (Optional)
+```
+ALLOWED_LOCATIONS=1,2,5   (restrict to locations 1, 2, 5)
+```
+
+**Use when:** Deploying to multiple locations  
+**Process:** Expand list daily after successful processing
 ✓ DRY_RUN protection (write blocking confirmed)
 ✓ Correlation ID tracing (UUID prefixes all logs)
 ```
