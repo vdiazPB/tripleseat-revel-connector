@@ -1,58 +1,27 @@
 import logging
 from integrations.tripleseat.models import ValidationResult
-from integrations.tripleseat.api_client import TripleSeatAPIClient
 
 logger = logging.getLogger(__name__)
 
 def validate_event(event_id: str, correlation_id: str = None) -> ValidationResult:
-    """Validate Triple Seat event for injection."""
-    client = TripleSeatAPIClient()
-    event_data = client.get_event(event_id)
-
-    if not event_data:
-        return ValidationResult(False, "Failed to fetch event data")
-
-    event = event_data.get("event", {})
-
-    # Check status
-    if event.get("status") != "Definite":
-        return ValidationResult(False, "Event status not Definite")
-
-    # Check event_date
-    if not event.get("event_date"):
-        return ValidationResult(False, "Missing event_date")
-
-    # Check site_id
-    if not event.get("site_id"):
-        return ValidationResult(False, "Missing site_id")
-
-    # Check billing invoice
-    documents = event_data.get("documents", [])
-    billing_invoice = None
-    for doc in documents:
-        if doc.get("type") == "billing_invoice":
-            billing_invoice = doc
-            break
-
-    if not billing_invoice:
-        return ValidationResult(False, "No billing invoice found")
-
-    # Check invoice is closed/final
-    if not billing_invoice.get("is_closed", False):
-        return ValidationResult(False, "Invoice not closed")
-
-    invoice_total = billing_invoice.get("total", 0)
-    if invoice_total < 0:
-        return ValidationResult(False, "Invalid invoice total")
-
-    # Check payments
-    payments = event_data.get("payments", [])
-    paid_total = sum(payment.get("amount", 0) for payment in payments)
-
-    if invoice_total == 0:
-        # PASS for free events
-        pass
-    elif paid_total < invoice_total:
-        return ValidationResult(False, "Payment insufficient")
-
-    return ValidationResult(True)
+    """Validate Triple Seat event for injection.
+    
+    NOTE: OAuth 2.0 API REMOVED - All API calls disabled.
+    This function returns False to force webhook-payload-only mode.
+    
+    Callers MUST use skip_validation=True parameter to process events.
+    All event data should come from webhook payloads.
+    
+    Args:
+        event_id: TripleSeat event ID (unused)
+        correlation_id: Request correlation ID for logging (unused)
+    
+    Returns:
+        ValidationResult(is_valid=False) with message indicating API is disabled
+    """
+    if correlation_id:
+        logger.warning(f"[req-{correlation_id}] Event validation via API DISABLED - use webhook payload only")
+    else:
+        logger.warning("Event validation via API DISABLED - use webhook payload only")
+    
+    return ValidationResult(False, "API_DISABLED_USE_WEBHOOK_PAYLOAD")

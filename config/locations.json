@@ -63,5 +63,10 @@
     "name": "Pinkbox Boca Park",
     "revel_establishment": "17",
     "timezone": "America/Los_Angeles"
+  },
+  "15691": {
+    "name": "Pinkbox Doughnuts (Catering/Test)",
+    "revel_establishment": "4",
+    "timezone": "America/Los_Angeles"
   }
 }

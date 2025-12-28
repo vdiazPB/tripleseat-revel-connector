@@ -4,6 +4,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
+from difflib import SequenceMatcher
 
 logger = logging.getLogger(__name__)
 
@@ -65,13 +66,45 @@ class RevelAPIClient:
             return []
 
     def resolve_product_by_name(self, establishment: str, product_name: str) -> Optional[Dict[str, Any]]:
-        """Resolve a product by exact name match."""
+        """Resolve a product by exact match first, then fuzzy match if needed.
+        
+        Tries:
+        1. Exact match (case-insensitive)
+        2. Fuzzy match (substring + similarity threshold)
+        
+        Returns matched product or None.
+        """
         products = self.get_products_by_establishment(establishment)
+        product_name_lower = product_name.lower()
+        
+        # First pass: exact match (case-insensitive)
+        for product in products:
+            if product.get('name', '').lower() == product_name_lower:
+                logger.info(f"[PRODUCT MATCH - EXACT] '{product_name}' → product_id={product.get('id')}")
+                return product
+        
+        # Second pass: fuzzy match (substring + similarity)
+        best_match = None
+        best_score = 0.0
+        threshold = 0.6  # 60% similarity threshold
         
         for product in products:
-            if product.get('name') == product_name:
-                logger.info(f"[PRODUCT MATCH] '{product_name}' → product_id={product.get('id')}")
+            revel_name = product.get('name', '').lower()
+            
+            # Check if search term is a substring of product name
+            if product_name_lower in revel_name or revel_name in product_name_lower:
+                logger.info(f"[PRODUCT MATCH - SUBSTRING] '{product_name}' → '{revel_name}' (product_id={product.get('id')})")
                 return product
+            
+            # Calculate similarity score
+            similarity = SequenceMatcher(None, product_name_lower, revel_name).ratio()
+            if similarity > best_score and similarity >= threshold:
+                best_score = similarity
+                best_match = product
+        
+        if best_match:
+            logger.info(f"[PRODUCT MATCH - FUZZY] '{product_name}' → '{best_match.get('name')}' (score={best_score:.2f}, product_id={best_match.get('id')})")
+            return best_match
         
         logger.warning(f"[PRODUCT NOT FOUND] '{product_name}' not found in establishment {establishment}")
         return None
@@ -225,6 +258,34 @@ class RevelAPIClient:
                 logger.error(f"Response status: {e.response.status_code}")
                 logger.error(f"Response body: {e.response.text[:500]}")
             return None
+
+    def open_order(self, order_id: str) -> bool:
+        """Open/activate an order so it appears in Revel UI.
+        
+        Sets the 'opened' flag to true, which makes the order visible in POS.
+        """
+        try:
+            headers = self._get_headers()
+            url = f"{self.base_url}/resources/Order/{order_id}/"
+            
+            # PATCH the order to mark it as opened
+            order_data = {
+                'opened': True,
+            }
+            
+            logger.info(f"Opening order {order_id} (marking as active)")
+            response = requests.patch(url, headers=headers, json=order_data)
+            
+            if response.status_code in [200, 202]:
+                logger.info(f"✅ Order {order_id} opened successfully")
+                return True
+            else:
+                logger.error(f"Failed to open order {order_id}: HTTP {response.status_code}")
+                logger.error(f"Response: {response.text[:500]}")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to open order {order_id}: {e}")
+            return False
 
     def _apply_discount(self, order_uri: str, amount: float, now: str, headers: Dict[str, str]) -> bool:
         """Apply Triple Seat Discount to an order by updating order fields."""

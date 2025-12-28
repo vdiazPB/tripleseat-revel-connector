@@ -1,50 +1,50 @@
-import os
-import requests
 import logging
 from typing import Dict, Any, Optional
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+class TripleSeatFailureType(str, Enum):
+    """Classification of TripleSeat API failures."""
+    TOKEN_FETCH_FAILED = "TOKEN_FETCH_FAILED"
+    AUTHORIZATION_DENIED = "AUTHORIZATION_DENIED"
+    RESOURCE_NOT_FOUND = "RESOURCE_NOT_FOUND"
+    API_ERROR = "API_ERROR"
+    UNKNOWN = "UNKNOWN"
+
 class TripleSeatAPIClient:
+    """TripleSeat API Client - OAuth 2.0 REMOVED.
+    
+    ⚠️ DEPRECATED - This class is now stub-only.
+    
+    All API calls are disabled to enforce webhook-payload-only mode.
+    Event data should come from webhook handlers, not API calls.
+    
+    This class is kept for backward compatibility but all methods return None.
+    """
+    
     def __init__(self):
-        # TripleSeat uses API key authentication, not OAuth
-        self.api_key = os.getenv('TRIPLESEAT_OAUTH_CLIENT_ID')  # This is actually the API key
-        self.api_secret = os.getenv('TRIPLESEAT_OAUTH_CLIENT_SECRET')  # API secret
-        # Base URL should NOT include /v1 - it's added per endpoint
-        base = os.getenv('TRIPLESEAT_API_BASE', 'https://api.tripleseat.com')
-        self.base_url = base.rstrip('/v1').rstrip('/')  # Remove trailing /v1 if present
+        logger.info("TripleSeatAPIClient initialized - OAuth 2.0 disabled (webhook-only mode)")
 
     def get_event(self, event_id: str) -> Optional[Dict[str, Any]]:
-        """Fetch event details from Triple Seat API."""
-        # TripleSeat API uses query params for auth
-        url = f"{self.base_url}/v1/events/{event_id}.json"
-        params = self._get_auth_params()
+        """Stub method - returns None.
+        
+        Use: Pass webhook payload directly to injection handler.
+        Set: skip_validation=True when calling webhook handlers.
+        """
+        logger.warning(f"[get_event] API call blocked - OAuth 2.0 disabled. Use webhook payload.")
+        return None
+    
+    def get_event_with_status(self, event_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Stub method - returns (None, AUTHORIZATION_DENIED).
+        
+        Use: Pass webhook payload directly to injection handler.
+        Set: skip_validation=True when calling webhook handlers.
+        """
+        logger.warning(f"[get_event_with_status] API call blocked for event {event_id}. Use webhook payload.")
+        return None, TripleSeatFailureType.AUTHORIZATION_DENIED
 
-        try:
-            logger.info(f"Fetching TripleSeat event {event_id} from {url}")
-            response = requests.get(url, params=params)
-            logger.info(f"TripleSeat response status: {response.status_code}")
-            response.raise_for_status()
-            data = response.json()
-            logger.info(f"TripleSeat event {event_id} fetched successfully")
-            return data
-        except requests.RequestException as e:
-            logger.error(f"Failed to fetch event {event_id}: {e}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response status: {e.response.status_code}")
-                logger.error(f"Response body: {e.response.text[:500]}")
-            return None
-
-    def _get_auth_params(self) -> Dict[str, str]:
-        """Get authentication query parameters for TripleSeat API."""
-        return {
-            'client_id': self.api_key,
-            'client_secret': self.api_secret
-        }
-
-    def _get_headers(self) -> Dict[str, str]:
-        """Get request headers."""
-        return {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
+    def check_tripleseat_access(self) -> bool:
+        """Stub - always returns False."""
+        logger.warning("[check_tripleseat_access] Stub method - OAuth 2.0 disabled")
+        return False

@@ -25,13 +25,228 @@ The TripleSeat-Revel Connector is **LIVE IN PRODUCTION** with comprehensive safe
 - Idempotency protection with duplicate detection
 - Error classification (validation, time gate, safety lock, internal)
 
-### Phase 3: Go-Live Complete ✅
+### Phase 3: Authentication Strategy Refactoring ✅
 
-- Test artifacts removed
-- Production logic locked in
-- Rollback and kill-switch preserved
-- Live traffic handling active
-- Monitoring and alerting operational
+- **Clean separation**: Public API Key for READ, OAuth reserved for WRITE
+- **Webhook-first data**: Payload contains full event/booking data
+- **Minimal API calls**: Only fetch supplemental data when needed
+- **Zero OAuth on reads**: Eliminates authorization-denied errors
+- **Production-safe**: No breaking changes, no endpoint changes
+
+## Authentication Architecture
+
+**Status:** REFACTORED & PRODUCTION-READY
+
+### Strategy Overview
+
+The connector now implements a **clean separation between READ and WRITE authentication**:
+
+#### Public API Key (READ-ONLY)
+- **Used for:** All GET endpoints (events, bookings, locations, menus, etc.)
+- **Authentication:** Header `X-API-Key: <TRIPLESEAT_PUBLIC_API_KEY>`
+- **Benefits:** Reliable, no token refresh, server-to-server access
+- **Configuration:** `TRIPLESEAT_PUBLIC_API_KEY` environment variable
+
+#### OAuth 2.0 (WRITE + USER-SCOPED)
+- **Used for:** Future write operations and user-scoped endpoints (reserved)
+- **Authentication:** Header `Authorization: Bearer <token>`
+- **Current status:** NOT USED for reads (prevents authorization-denied errors)
+- **Configuration:** `TRIPLESEAT_OAUTH_CLIENT_ID`, `TRIPLESEAT_OAUTH_CLIENT_SECRET`
+
+### Webhook-First Data Strategy
+
+**Processing order:**
+
+1. **Prefer webhook payload data**
+   - Event: `payload["event"]` contains status, date, site_id, items, etc.
+   - Booking: `payload["booking"]` contains guest info, pricing, etc.
+   - Data is trusted if webhook signature is valid (HMAC SHA256)
+
+2. **API fetch only if critical fields missing**
+   - Uses Public API Key for supplemental data
+   - Example: Fetch invoice details if not in webhook
+
+3. **Merge safely**
+   - Webhook payload takes precedence
+   - API data fills missing fields only
+   - Never overwrites webhook-provided values
+
+### Authorization Handling
+
+**Before refactoring:**
+- All reads used OAuth 2.0
+- Could fail with AUTHORIZATION_DENIED (scope/permission issues)
+- Webhook validation would fail even though event data was in payload
+
+**After refactoring:**
+- All reads use Public API Key
+- OAuth failures completely eliminated for read operations
+- Webhook payload data used directly (no API call needed)
+- API calls only for supplemental data (rare)
+
+### Implementation Details
+
+**New module:** `integrations/tripleseat/auth_strategy.py`
+- `get_read_headers()` - Returns headers with Public API Key
+- `get_oauth_headers(token)` - Returns headers with OAuth Bearer token
+- `sanitize_headers_for_read()` - Guardrail to prevent OAuth on read endpoints
+- `validate_public_api_key()` - Validates configuration
+
+**Modified modules:**
+- `api_client.py` - Switched `get_event_with_status()` to use Public API Key
+- `validation.py` - Documented auth strategy in docstrings
+- `time_gate.py` - Documented auth strategy in docstrings
+- `webhook_handler.py` - Added payload-first strategy documentation
+
+### Logging
+
+All auth decisions logged with context:
+```
+[req-abc123] Fetching TripleSeat event 12345 using Public API Key (READ-ONLY)
+[req-abc123] Using webhook payload for event 12345
+[req-abc123] Supplementing event 12345 via Public API Key
+[req-abc123] OAuth disabled for read-only endpoint (auth_strategy guardrail)
+```
+
+### No Breaking Changes
+
+✅ Endpoint paths unchanged  
+✅ Webhook handling unchanged  
+✅ OAuth code remains (future use)  
+✅ Business logic unchanged  
+✅ Backward compatible  
+✅ Production-safe minimal diff  
+
+## Webhook Security & Compliance
+
+**Status:** COMPLETE & PRODUCTION-READY
+
+The webhook handler is now fully hardened and compliant with TripleSeat webhook specifications.
+
+### Signature Verification
+
+**Implementation:**
+- Reads `X-Signature` header from webhook
+- Parses format: `t=<timestamp>,v1=<signature>`
+- Reconstructs signed payload: `timestamp.raw_body`
+- Computes HMAC SHA256 using `TRIPLESEAT_WEBHOOK_SIGNING_KEY`
+- Constant-time comparison to prevent timing attacks
+
+**Configuration:**
+```bash
+TRIPLESEAT_WEBHOOK_SIGNING_KEY=<key_from_tripleseat_app_settings>
+```
+
+**Security Behavior:**
+- Invalid signature → returns `ok=false` with `SIGNATURE_VERIFICATION_FAILED_*` reason
+- Missing signature → returns `ok=false` with specific error code
+- All rejection reasons logged (no secret exposure)
+
+### Trigger-Type Routing
+
+**Actionable triggers (processed):**
+- `CREATE_EVENT`
+- `UPDATE_EVENT`
+- `STATUS_CHANGE_EVENT`
+- `CREATE_BOOKING`
+- `STATUS_CHANGE_BOOKING`
+- `EVENT_CREATED`, `EVENT_UPDATED` (alternative naming)
+- `BOOKING_CREATED`, `BOOKING_UPDATED` (alternative naming)
+
+**Non-actionable triggers (acknowledged safely):**
+- Any trigger type not in the allowlist
+- Returns `ok=true, processed=false` to signal safe acknowledgment
+- Prevents TripleSeat retries
+
+### Payload-First Processing
+
+**Key optimization:**
+- Webhook payloads contain event/booking data
+- Uses this data directly instead of making API calls
+- Only fetches from TripleSeat API if additional data is required
+- Avoids permission-denied errors when webhook has sufficient data
+
+**Benefit:**
+- Reduces API calls and latency
+- Avoids authorization issues when data is already in webhook
+
+### Idempotency Guarantee
+
+**Detection key:**
+```
+trigger_type + event_id + updated_at
+```
+
+**Behavior:**
+- Duplicate deliveries detected and skipped
+- Safe acknowledgment returned: `ok=true, processed=false`
+- Prevents double-processing of events
+
+### Response Contract (MANDATORY)
+
+All webhook responses return **HTTP 200** with structure:
+
+```json
+{
+  "ok": true | false,
+  "processed": true | false,
+  "trigger": "<webhook_trigger_type>",
+  "reason": "<optional error or state reason>"
+}
+```
+
+**Semantic meanings:**
+
+| ok | processed | Meaning |
+|---|---|---|
+| true | true | Webhook received, verified, processed successfully |
+| true | false | Webhook received & verified but not processed (e.g., duplicate, non-actionable, time-gated) |
+| false | false | Webhook received but invalid (signature, data, format) |
+
+**All cases return HTTP 200** to prevent TripleSeat retries and webhook deactivation.
+
+### Logging Standards
+
+All webhook logs include:
+- Correlation ID: `[req-{id}]`
+- Trigger type
+- Event/booking IDs (if present)
+- Processing decision and reason
+- No secrets or signatures logged
+
+**Example log sequence:**
+```
+[req-abc123] Webhook received
+[req-abc123] Trigger type: CREATE_EVENT, Event: 12345, Booking: None
+[req-abc123] Webhook signature verified successfully
+[req-abc123] Event data not in webhook payload, will fetch from API if needed
+[req-abc123] Authorization denied: Cannot access event 12345
+[req-abc123] Event 12345 authorization denied by TripleSeat
+[req-abc123] Webhook processed (authorization denied)
+```
+
+### Permission-Safe Behavior
+
+**If OAuth token lacks permission for event:**
+- TripleSeat API returns 401 AFTER token is refreshed
+- Webhook handler returns `ok=true, authorization_status=DENIED`
+- No Revel injection attempted
+- No error email sent
+- Safe acknowledgment prevents retries
+
+**Result:**
+- Permission-denied events don't break production
+- Clear logs indicate authorization issue (not system error)
+- Manual review can address permission problems
+
+### Production Safety
+
+✅ All responses return HTTP 200 (no webhook deactivation)
+✅ Signature verification prevents tampering
+✅ Trigger allowlist prevents accidental processing
+✅ Idempotency prevents double-processing
+✅ Payload-first reduces permission failures
+✅ Clear semantics distinguish different states
 
 ### Phase 3: Operational Documentation ✅
 

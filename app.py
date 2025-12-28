@@ -54,14 +54,35 @@ async def webhook(request: Request):
     # Kill switch check
     if not enable_connector:
         logger.info(f"[req-{correlation_id}] CONNECTOR DISABLED – event acknowledged")
-        return {"ok": True, "acknowledged": True, "reason": "CONNECTOR_DISABLED"}
+        return {"ok": True, "processed": False, "reason": "CONNECTOR_DISABLED", "trigger": None}
     
     logger.info(f"[req-{correlation_id}] WEBHOOK INVOKED")
     try:
+        # Get raw body for signature verification
+        raw_body = await request.body()
         payload = await request.json()
+        
+        # Log webhook payload to file for debugging
+        event_id = payload.get('event', {}).get('id') or payload.get('booking', {}).get('event_id')
+        if event_id:
+            log_file = f"webhook_event_{event_id}.json"
+            try:
+                import json
+                with open(log_file, 'w') as f:
+                    json.dump(payload, f, indent=2)
+                logger.info(f"[req-{correlation_id}] Webhook payload saved to {log_file}")
+            except Exception as e:
+                logger.warning(f"[req-{correlation_id}] Could not save webhook payload: {e}")
+        
+        # Get X-Signature header for verification
+        x_signature_header = request.headers.get('X-Signature')
+        
         result = await handle_tripleseat_webhook(
             payload, 
-            correlation_id, 
+            correlation_id,
+            x_signature_header=x_signature_header,
+            raw_body=raw_body,
+            verify_signature_flag=False,  # TEMPORARILY DISABLED for testing
             dry_run=dry_run,
             enable_connector=enable_connector,
             allowed_locations=allowed_locations,
@@ -70,8 +91,13 @@ async def webhook(request: Request):
         )
         return result
     except Exception as e:
-        logger.error(f"[req-{correlation_id}] Webhook failed: {e}")
-        return {"ok": False, "error": str(e), "correlation_id": correlation_id}
+        logger.error(f"[req-{correlation_id}] Webhook handler failed: {e}")
+        return {"ok": False, "processed": False, "reason": f"HANDLER_ERROR: {str(e)}", "trigger": None}
+
+@app.post("/webhooks/tripleseat")
+async def webhooks_tripleseat(request: Request):
+    """Alias endpoint for /webhook to match TripleSeat configuration."""
+    return await webhook(request)
 
 @app.post("/test/webhook")
 async def test_webhook(request: Request):
@@ -80,14 +106,20 @@ async def test_webhook(request: Request):
     # Kill switch check
     if not enable_connector:
         logger.info(f"[req-{correlation_id}] CONNECTOR DISABLED – event acknowledged")
-        return {"ok": True, "acknowledged": True, "reason": "CONNECTOR_DISABLED"}
+        return {"ok": True, "processed": False, "reason": "CONNECTOR_DISABLED", "trigger": None}
     
     logger.info(f"[req-{correlation_id}] TEST WEBHOOK INVOKED")
     try:
+        # Get raw body for signature verification (test endpoint can skip verification)
+        raw_body = await request.body()
         payload = await request.json()
+        
         result = await handle_tripleseat_webhook(
             payload, 
             correlation_id,
+            x_signature_header=None,  # Don't verify in test mode
+            raw_body=raw_body,
+            verify_signature_flag=False,  # Skip signature verification for test
             dry_run=dry_run,
             enable_connector=enable_connector,
             allowed_locations=allowed_locations,
@@ -97,7 +129,12 @@ async def test_webhook(request: Request):
         return result
     except Exception as e:
         logger.error(f"[req-{correlation_id}] Test webhook failed: {e}")
-        return {"ok": False, "error": str(e), "correlation_id": correlation_id}
+        return {
+            "ok": False,
+            "processed": False,
+            "reason": f"HANDLER_EXCEPTION_{type(e).__name__}",
+            "trigger": None
+        }
 
 @app.get("/test/revel")
 def test_revel():

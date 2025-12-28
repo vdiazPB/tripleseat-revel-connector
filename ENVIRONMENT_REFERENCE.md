@@ -14,7 +14,9 @@ All environment variables must be set in Render dashboard under **Settings > Env
 |----------|------|---------|---------|---------|
 | `ENV` | string | development | Deployment environment | `production` |
 | `TIMEZONE` | string | UTC | Timezone for events and logging | `America/Los_Angeles` |
-| `TRIPLESEAT_API_KEY` | secret | NONE | TripleSeat API authentication | `ts_live_xxx` |
+| `TRIPLESEAT_PUBLIC_API_KEY` | secret | NONE | TripleSeat Public API Key (READ-ONLY endpoints) | `07ae2072c680...` |
+| `TRIPLESEAT_OAUTH_CLIENT_ID` | secret | NONE | TripleSeat OAuth client ID (for future WRITE operations) | `k2AjxXq3kP_...` |
+| `TRIPLESEAT_OAUTH_CLIENT_SECRET` | secret | NONE | TripleSeat OAuth client secret (for future WRITE operations) | `TLOKqkA5_0q...` |
 | `REVEL_API_KEY` | secret | NONE | Revel POS API authentication | `revel_xxx` |
 | `SENDGRID_API_KEY` | secret | NONE | SendGrid email API key | `SG.xxx` |
 
@@ -52,11 +54,51 @@ All environment variables must be set in Render dashboard under **Settings > Env
 | `REVEL_TRIPLESEAT_CUSTOM_MENU_ID` | string | `2340` | Revel custom menu ID (Pinkbox) | `2340` |
 | `REVEL_TRIPLESEAT_PRODUCT_GROUP_ID` | string | `4425` | Revel product group ID (Pinkbox) | `4425` |
 
+## TripleSeat Authentication Strategy
+
+### Overview
+
+The connector uses a **clean separation between READ and WRITE authentication**:
+
+#### Public API Key (READ-ONLY)
+- **Used for:** All GET endpoints (events, bookings, locations, menus, etc.)
+- **Header:** `X-API-Key: <TRIPLESEAT_PUBLIC_API_KEY>`
+- **Reliability:** Server-to-server read access, no token refresh needed
+- **Use case:** Primary authentication for event data fetch/validation
+
+#### OAuth 2.0 (WRITE + USER-SCOPED)
+- **Used for:** Future write operations and user-scoped endpoints (reserved)
+- **Headers:** `Authorization: Bearer <token>`
+- **Current status:** Configured but NOT USED for reads (prevents auth issues)
+- **Why separate:** OAuth can fail with AUTHORIZATION_DENIED even with valid tokens
+
+### Webhook-First Data Strategy
+
+1. **Webhook payload is primary source of truth**
+   - Event data: `payload["event"]` (status, date, site_id, items, etc.)
+   - Booking data: `payload["booking"]` (guest info, pricing, etc.)
+
+2. **API fetch only if critical fields are missing**
+   - Uses Public API Key for supplemental data
+   - Minimal API calls (most data from webhook)
+
+3. **Signature verification**
+   - X-Signature header (HMAC SHA256) validates webhook origin
+   - Validated payload data is trusted implicitly
+
+### Configuration Checklist
+
+✅ **Required:** `TRIPLESEAT_PUBLIC_API_KEY`  
+✅ **Optional (future):** `TRIPLESEAT_OAUTH_CLIENT_ID`, `TRIPLESEAT_OAUTH_CLIENT_SECRET`  
+✅ **Required:** `TRIPLESEAT_WEBHOOK_SIGNING_KEY` (or `TRIPLESEAT_WEBHOOK_SECRET`)  
+
 ### Optional Variables
 
 | Variable | Type | Default | Purpose | Example |
 |----------|------|---------|---------|---------|
-| `TRIPLESEAT_SIGNING_SECRET` | secret | NONE | Webhook signature verification (if enabled) | `secret_xxx` |
+| `TRIPLESEAT_WEBHOOK_SIGNING_KEY` | secret | NONE | Webhook signature verification (HMAC SHA256) | `f58b124f...` |
+| `TRIPLESEAT_WEBHOOK_SECRET` | secret | NONE | Alternative name for signing key | `f58b124f...` |
+| `TRIPLESEAT_OAUTH_TOKEN_URL` | string | `https://api.tripleseat.com/oauth2/token` | OAuth token endpoint | (default shown) |
 | `LOG_LEVEL` | string | INFO | Python logging level | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` |
 
 ## Pre-Production Configuration
