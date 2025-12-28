@@ -126,16 +126,27 @@ def inject_order(
     # Get invoice totals (may be None if no billing invoice)
     invoice_total = billing_invoice.get("total", 0) if billing_invoice else 0
     subtotal = billing_invoice.get("subtotal", 0) if billing_invoice else 0
+    
+    # Calculate discount if invoice total is less than subtotal
+    discount_amount = subtotal - invoice_total if invoice_total < subtotal else 0
 
     # Build order data with resolved items - use new format expected by create_order()
+    # Uses Triple Seat configuration: Pinkbox menu, Triple Seat dining option,
+    # Triple Seat custom payment, Triple Seat Discount
     order_data = {
         "establishment": establishment,
         "local_id": external_order_id,  # For idempotency/deduplication
         "notes": f"Triple Seat Event #{event_id}",
-        "items": resolved_items  # List of {product_id, quantity, price}
+        "items": resolved_items,  # List of {product_id, quantity, price}
+        "discount_amount": discount_amount,  # Triple Seat Discount
+        "payment_amount": invoice_total,  # Triple Seat Payment
     }
 
     logger.info(f"[req-{correlation_id}] [INJECTION] Creating order with {len(resolved_items)} items in establishment {establishment}")
+    if discount_amount > 0:
+        logger.info(f"[req-{correlation_id}] [INJECTION] Applying Triple Seat Discount: ${discount_amount}")
+    if invoice_total > 0:
+        logger.info(f"[req-{correlation_id}] [INJECTION] Applying Triple Seat Payment: ${invoice_total}")
 
     # Create order
     created_order = revel_client.create_order(order_data)

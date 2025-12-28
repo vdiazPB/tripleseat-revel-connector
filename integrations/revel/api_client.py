@@ -23,6 +23,17 @@ class RevelAPIClient:
         # Default user and POS station for API orders (configurable via env)
         self.default_user_id = os.getenv('REVEL_DEFAULT_USER_ID', '209')
         self.default_pos_station_id = os.getenv('REVEL_DEFAULT_POS_STATION_ID', '4')
+        
+        # Triple Seat specific configuration
+        # Pinkbox CustomMenu: ID 2340, ProductGroup: ID 4425
+        self.tripleseat_custom_menu_id = os.getenv('REVEL_TRIPLESEAT_CUSTOM_MENU_ID', '2340')
+        self.tripleseat_product_group_id = os.getenv('REVEL_TRIPLESEAT_PRODUCT_GROUP_ID', '4425')
+        # Triple Seat Dining Option: ID 113
+        self.tripleseat_dining_option_id = int(os.getenv('REVEL_TRIPLESEAT_DINING_OPTION_ID', '113'))
+        # Triple Seat Custom Payment Type: ID 236
+        self.tripleseat_payment_type_id = os.getenv('REVEL_TRIPLESEAT_PAYMENT_TYPE_ID', '236')
+        # Triple Seat Discount (open discount): ID 3358
+        self.tripleseat_discount_id = os.getenv('REVEL_TRIPLESEAT_DISCOUNT_ID', '3358')
 
     def get_products_by_establishment(self, establishment: str) -> List[Dict[str, Any]]:
         """Fetch all products for an establishment from Revel."""
@@ -97,6 +108,7 @@ class RevelAPIClient:
                 - notes: Order notes/description
                 - local_id: External reference ID (for deduplication)
                 - items: List of line items with product_id, quantity, price
+                - discount_amount: Optional discount amount to apply
         
         Returns:
             Created order dict with all items, or None on failure
@@ -105,12 +117,14 @@ class RevelAPIClient:
         notes = order_data.get('notes', '')
         local_id = order_data.get('local_id', '')
         items = order_data.get('items', [])
+        discount_amount = order_data.get('discount_amount', 0)
         
         headers = self._get_headers()
         now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')
         order_uuid = str(uuid.uuid4())
         
         # Build required fields for order creation
+        # Using Triple Seat dining option (ID 113)
         revel_order_data = {
             'uuid': order_uuid,
             'establishment': f'/enterprise/Establishment/{establishment}/',
@@ -120,7 +134,7 @@ class RevelAPIClient:
             'last_updated_at': f'/resources/PosStation/{self.default_pos_station_id}/',
             'created_date': now,
             'updated_date': now,
-            'dining_option': 0,  # 0 = dine in
+            'dining_option': self.tripleseat_dining_option_id,  # Triple Seat dining option
             'pos_mode': 'Q',  # Q = quick service
             'notes': notes,
             'local_id': local_id,  # For tracking/deduplication
@@ -171,7 +185,7 @@ class RevelAPIClient:
                     'modifier_amount': 0,
                     'temp_sort': 0,
                     'tax_rate': 0,
-                    'dining_option': 0,
+                    'dining_option': self.tripleseat_dining_option_id,  # Triple Seat dining option
                 }
                 
                 logger.info(f"Adding item: product_id={item.get('product_id')}, qty={item.get('quantity')}")
@@ -182,6 +196,23 @@ class RevelAPIClient:
                     logger.info(f"  ✅ Item added: {item_response.json().get('id')}")
                 else:
                     logger.error(f"  ❌ Failed to add item: {item_response.text[:200]}")
+            
+            # Step 3: Apply Triple Seat discount if discount_amount provided
+            if discount_amount and discount_amount > 0:
+                discount_success = self._apply_discount(order_uri, discount_amount, now, headers)
+                if discount_success:
+                    logger.info(f"  ✅ Triple Seat Discount applied: ${discount_amount}")
+                else:
+                    logger.warning(f"  ⚠️ Failed to apply discount (order still created)")
+            
+            # Step 4: Apply Triple Seat payment
+            payment_amount = order_data.get('payment_amount', 0)
+            if payment_amount and payment_amount > 0:
+                payment_success = self._apply_payment(order_uri, payment_amount, now, headers, establishment)
+                if payment_success:
+                    logger.info(f"  ✅ Triple Seat Payment applied: ${payment_amount}")
+                else:
+                    logger.warning(f"  ⚠️ Failed to apply payment (order still created)")
             
             # Return order with items
             created_order['items'] = created_items
@@ -194,6 +225,45 @@ class RevelAPIClient:
                 logger.error(f"Response status: {e.response.status_code}")
                 logger.error(f"Response body: {e.response.text[:500]}")
             return None
+
+    def _apply_discount(self, order_uri: str, amount: float, now: str, headers: Dict[str, str]) -> bool:
+        """Apply Triple Seat Discount to an order by updating order fields."""
+        try:
+            # Discount is applied by PATCH to the order, not by creating a separate record
+            discount_data = {
+                'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',
+                'discount_amount': amount,
+            }
+            url = f"{self.base_url}{order_uri}"
+            response = requests.patch(url, headers=headers, json=discount_data)
+            return response.status_code in [200, 202]
+        except Exception as e:
+            logger.error(f"Failed to apply discount: {e}")
+            return False
+
+    def _apply_payment(self, order_uri: str, amount: float, now: str, headers: Dict[str, str], establishment: str) -> bool:
+        """Apply Triple Seat payment to an order."""
+        try:
+            payment_url = f"{self.base_url}/resources/Payment/"
+            payment_data = {
+                'uuid': str(uuid.uuid4()),
+                'order': order_uri,
+                'payment_type': int(self.tripleseat_payment_type_id),  # Triple Seat payment type
+                'amount': str(amount),
+                'tip': '0.00',
+                'payment_date': now,
+                'created_date': now,
+                'updated_date': now,
+                'created_by': f'/enterprise/User/{self.default_user_id}/',
+                'updated_by': f'/enterprise/User/{self.default_user_id}/',
+                'station': f'/resources/PosStation/{self.default_pos_station_id}/',
+                'establishment': f'/enterprise/Establishment/{establishment}/',
+            }
+            response = requests.post(payment_url, headers=headers, json=payment_data)
+            return response.status_code in [200, 201]
+        except Exception as e:
+            logger.error(f"Failed to apply payment: {e}")
+            return False
 
     def _get_headers(self) -> Dict[str, str]:
         """Get authentication headers."""
