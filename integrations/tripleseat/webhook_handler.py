@@ -19,7 +19,9 @@ async def handle_tripleseat_webhook(
     correlation_id: str, 
     verify_signature_flag: bool = True,
     dry_run: bool = True,
-    allowed_locations: list = None
+    allowed_locations: list = None,
+    test_location_override: bool = False,
+    test_establishment_id: str = "4"
 ):
     """Handle incoming Triple Seat webhook."""
     logger.info(f"[req-{correlation_id}] Webhook received")
@@ -75,34 +77,50 @@ async def handle_tripleseat_webhook(
 
     # Run pipeline
     try:
-        # STEP 1: Validation
-        validation_result = validate_event(event_id, correlation_id)
-        if not validation_result.is_valid:
-            logger.info(f"[req-{correlation_id}] Event {event_id} failed validation: {validation_result.reason}")
-            return {
-                "ok": False,
-                "dry_run": dry_run,
-                "site_id": site_id,
-                "time_gate": "UNKNOWN"
-            }
-
-        # STEP 2: Time Gate
-        time_gate_result = check_time_gate(event_id, correlation_id)
-        if time_gate_result == "PROCEED":
-            logger.info(f"[req-{correlation_id}] Time gate: OPEN")
-            time_gate_status = "OPEN"
+        # STEP 1: Validation (SKIP in test mode - use webhook payload directly)
+        if test_location_override:
+            logger.info(f"[req-{correlation_id}] [TEST MODE] Skipping API validation - using webhook payload")
+            validation_passed = True
         else:
-            logger.info(f"[req-{correlation_id}] Time gate: CLOSED ({time_gate_result})")
-            time_gate_status = "CLOSED"
-            return {
-                "ok": True,
-                "dry_run": dry_run,
-                "site_id": site_id,
-                "time_gate": time_gate_status
-            }
+            validation_result = validate_event(event_id, correlation_id)
+            validation_passed = validation_result.is_valid
+            if not validation_passed:
+                logger.info(f"[req-{correlation_id}] Event {event_id} failed validation: {validation_result.reason}")
+                return {
+                    "ok": False,
+                    "dry_run": dry_run,
+                    "site_id": site_id,
+                    "time_gate": "UNKNOWN"
+                }
+
+        # STEP 2: Time Gate (SKIP in test mode)
+        if test_location_override:
+            logger.info(f"[req-{correlation_id}] [TEST MODE] Skipping time gate check")
+            time_gate_status = "BYPASSED"
+        else:
+            time_gate_result = check_time_gate(event_id, correlation_id)
+            if time_gate_result == "PROCEED":
+                logger.info(f"[req-{correlation_id}] Time gate: OPEN")
+                time_gate_status = "OPEN"
+            else:
+                logger.info(f"[req-{correlation_id}] Time gate: CLOSED ({time_gate_result})")
+                time_gate_status = "CLOSED"
+                return {
+                    "ok": True,
+                    "dry_run": dry_run,
+                    "site_id": site_id,
+                    "time_gate": time_gate_status
+                }
 
         # STEP 3: Revel Injection
-        injection_result = inject_order(event_id, correlation_id, dry_run=dry_run)
+        injection_result = inject_order(
+            event_id, 
+            correlation_id, 
+            dry_run=dry_run,
+            test_location_override=test_location_override,
+            test_establishment_id=test_establishment_id,
+            webhook_payload=payload  # Pass webhook payload for test mode
+        )
         if not injection_result.success:
             logger.error(f"[req-{correlation_id}] Event {event_id} injection failed: {injection_result.error}")
             send_failure_email(event_id, injection_result.error, correlation_id)

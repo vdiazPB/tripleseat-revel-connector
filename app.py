@@ -24,12 +24,18 @@ dry_run = os.getenv('DRY_RUN', 'true').lower() == 'true'  # Default to true for 
 enable_connector = os.getenv('ENABLE_CONNECTOR', 'true').lower() == 'true'
 allowed_locations = os.getenv('ALLOWED_LOCATIONS', '').split(',') if os.getenv('ALLOWED_LOCATIONS') else []
 
+# TEST MODE: Override all locations to establishment 4 (Siegel)
+test_location_override = os.getenv('TEST_LOCATION_OVERRIDE', 'false').lower() == 'true'
+test_establishment_id = os.getenv('TEST_ESTABLISHMENT_ID', '4')
+
 logger.info(f"Starting TripleSeat-Revel Connector")
 logger.info(f"ENV: {env}")
 logger.info(f"TIMEZONE: {timezone}")
 logger.info(f"DRY_RUN: {dry_run}")
 logger.info(f"ENABLE_CONNECTOR: {enable_connector}")
 logger.info(f"ALLOWED_LOCATIONS: {allowed_locations if allowed_locations and allowed_locations[0] else 'UNRESTRICTED'}")
+if test_location_override:
+    logger.warning(f"TEST_LOCATION_OVERRIDE ENABLED – All orders routed to establishment {test_establishment_id}")
 
 @app.get("/health")
 def health():
@@ -57,7 +63,9 @@ async def webhook(request: Request):
             payload, 
             correlation_id, 
             dry_run=dry_run,
-            allowed_locations=allowed_locations
+            allowed_locations=allowed_locations,
+            test_location_override=test_location_override,
+            test_establishment_id=test_establishment_id
         )
         return result
     except Exception as e:
@@ -80,7 +88,9 @@ async def test_webhook(request: Request):
             payload, 
             correlation_id,
             dry_run=dry_run,
-            allowed_locations=allowed_locations
+            allowed_locations=allowed_locations,
+            test_location_override=test_location_override,
+            test_establishment_id=test_establishment_id
         )
         return result
     except Exception as e:
