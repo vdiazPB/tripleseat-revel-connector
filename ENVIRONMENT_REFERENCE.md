@@ -33,6 +33,25 @@ All environment variables must be set in Render dashboard under **Settings > Env
 | `TRIPLESEAT_EMAIL_SENDER` | email | NONE | Sender address for notifications | `noreply@company.com` |
 | `TRIPLESEAT_EMAIL_RECIPIENTS` | csv | NONE | Recipients for success/failure emails | `ops@company.com,admin@company.com` |
 
+### Revel API Configuration
+
+| Variable | Type | Default | Purpose | Example |
+|----------|------|---------|---------|---------|
+| `REVEL_DOMAIN` | string | NONE | Revel POS domain (with or without .revelup.com) | `pinkboxdoughnuts` |
+| `REVEL_API_SECRET` | secret | NONE | Revel API secret for authentication | `secret_xxx` |
+| `REVEL_DEFAULT_USER_ID` | string | `209` | Default user ID for API orders | `209` |
+| `REVEL_DEFAULT_POS_STATION_ID` | string | `4` | Default POS station ID | `4` |
+
+### Triple Seat Configuration (Revel IDs)
+
+| Variable | Type | Default | Purpose | Example |
+|----------|------|---------|---------|---------|
+| `REVEL_TRIPLESEAT_DINING_OPTION_ID` | string | `113` | Revel dining option ID for Triple Seat orders | `113` |
+| `REVEL_TRIPLESEAT_PAYMENT_TYPE_ID` | string | `236` | Revel custom payment type ID for Triple Seat | `236` |
+| `REVEL_TRIPLESEAT_DISCOUNT_ID` | string | `3358` | Revel open discount ID for Triple Seat | `3358` |
+| `REVEL_TRIPLESEAT_CUSTOM_MENU_ID` | string | `2340` | Revel custom menu ID (Pinkbox) | `2340` |
+| `REVEL_TRIPLESEAT_PRODUCT_GROUP_ID` | string | `4425` | Revel product group ID (Pinkbox) | `4425` |
+
 ### Optional Variables
 
 | Variable | Type | Default | Purpose | Example |
