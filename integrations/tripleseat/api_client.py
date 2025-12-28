@@ -15,8 +15,8 @@ class TripleSeatFailureType(str, Enum):
     API_ERROR = "API_ERROR"
     UNKNOWN = "UNKNOWN"
 
-def safe_json(response: requests.Response, request_id: str = None) -> Optional[Dict[str, Any]]:
-    """Safely parse JSON from response, handling errors explicitly.
+def safe_json_response(response: requests.Response, request_id: str = None) -> Optional[Dict[str, Any]]:
+    """Safely parse JSON from response, explicitly rejecting HTML and non-JSON.
     
     Args:
         response: The HTTP response object
@@ -24,23 +24,35 @@ def safe_json(response: requests.Response, request_id: str = None) -> Optional[D
         
     Returns:
         Parsed JSON dict or None if parsing fails
+        
+    Raises:
+        ValueError: If response is HTML or not valid JSON
     """
     req_id = f"[req-{request_id}]" if request_id else ""
+    
+    # Log response details once
+    content_type = response.headers.get('content-type', '').lower()
+    body_preview = response.text[:300] if response.text else "empty"
+    logger.info(f"{req_id} Response: HTTP {response.status_code}, Content-Type: {content_type}, Body preview: {body_preview}")
+    
+    # Explicitly reject HTML responses (indicates auth failure)
+    if 'text/html' in content_type:
+        logger.error(f"{req_id} Received HTML login page instead of JSON - OAuth authentication failed")
+        raise ValueError("HTML_RESPONSE: OAuth authentication failed, received login page")
     
     if response.status_code != 200:
         logger.error(f"{req_id} Cannot parse JSON: HTTP {response.status_code}")
         return None
     
-    content_type = response.headers.get('content-type', '').lower()
     if 'application/json' not in content_type:
         logger.error(f"{req_id} Response not JSON: content-type={content_type}")
-        return None
+        raise ValueError(f"INVALID_CONTENT_TYPE: Expected application/json, got {content_type}")
     
     try:
         text = response.text.strip()
         if not text:
             logger.error(f"{req_id} Response body is empty")
-            return None
+            raise ValueError("EMPTY_RESPONSE: No JSON content")
         
         data = response.json()
         logger.debug(f"{req_id} JSON parsed successfully")
@@ -48,20 +60,19 @@ def safe_json(response: requests.Response, request_id: str = None) -> Optional[D
     except ValueError as e:
         body_preview = response.text[:300] if response.text else "empty"
         logger.error(f"{req_id} JSON decode error: {e}. Body preview: {body_preview}")
-        return None
+        raise ValueError(f"JSON_DECODE_ERROR: {e}")
 
 class TripleSeatAPIClient:
-    """TripleSeat API Client - OAuth 1.0 Implementation.
+    """TripleSeat API Client - OAuth 1.0 Implementation with Bearer-like Headers.
     
-    Uses OAuth 1.0 (3-legged authentication) for secure API access.
+    Uses OAuth 1.0 (signature-based authentication) for secure API access.
+    Ensures ALL API calls include proper authentication headers and JSON content-type.
     """
     
     def __init__(self):
         self.base_url = os.getenv('TRIPLESEAT_API_BASE', 'https://api.tripleseat.com')
         self.consumer_key = os.getenv('CONSUMER_KEY', '').strip()
         self.consumer_secret = os.getenv('CONSUMER_SECRET', '').strip()
-        self.access_token = os.getenv('TRIPLESEAT_OAUTH_TOKEN', '').strip()
-        self.access_token_secret = os.getenv('TRIPLESEAT_OAUTH_TOKEN_SECRET', '').strip()
         
         # Validate OAuth 1.0 credentials
         if not all([self.consumer_key, self.consumer_secret]):
@@ -72,11 +83,14 @@ class TripleSeatAPIClient:
                 self.oauth_session = OAuth1Session(
                     client_key=self.consumer_key,
                     client_secret=self.consumer_secret,
-                    resource_owner_key=self.access_token or '',
-                    resource_owner_secret=self.access_token_secret or '',
                     signature_type='AUTH_HEADER'
                 )
-                logger.info("✅ TripleSeatAPIClient initialized with OAuth 1.0")
+                # Set default headers for JSON API calls
+                self.oauth_session.headers.update({
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                })
+                logger.info("✅ TripleSeatAPIClient initialized with OAuth 1.0 authentication")
             except Exception as e:
                 logger.error(f"❌ Failed to initialize OAuth 1.0: {e}")
                 self.oauth_session = None
@@ -95,11 +109,11 @@ class TripleSeatAPIClient:
             return None
             
         try:
-            url = f"{self.base_url}/v2/events/{event_id}"
+            url = f"{self.base_url}/v1/events/{event_id}"
             response = self.oauth_session.get(url, timeout=10)
             response.raise_for_status()
             
-            data = safe_json(response)
+            data = safe_json_response(response)
             if data:
                 logger.info(f"✅ [get_event] Retrieved event {event_id} via OAuth 1.0")
                 return data.get('event')
@@ -113,12 +127,18 @@ class TripleSeatAPIClient:
                 return None
             logger.error(f"[get_event] HTTP error: {e.response.status_code} - {e}")
             return None
+        except ValueError as e:
+            logger.error(f"[get_event] Response validation error: {e}")
+            return None
         except Exception as e:
             logger.error(f"[get_event] Error fetching event {event_id}: {e}")
             return None
     
     def get_event_with_status(self, event_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Fetch event and return tuple with status code.
+        
+        Uses OAuth 1.0 authentication with proper headers.
+        Explicitly rejects HTML responses and validates JSON content.
         
         Args:
             event_id: TripleSeat event ID
@@ -131,33 +151,47 @@ class TripleSeatAPIClient:
             return None, TripleSeatFailureType.AUTHORIZATION_DENIED
             
         try:
-            url = f"{self.base_url}/v2/events/{event_id}"
+            url = f"{self.base_url}/v1/events/{event_id}"
             logger.info(f"[get_event_with_status] Requesting: {url}")
             
             response = self.oauth_session.get(url, timeout=10)
             
-            # Log response details
-            body_preview = response.text[:300] if response.text else "empty"
-            logger.info(f"[get_event_with_status] Response: HTTP {response.status_code}, Body preview: {body_preview}")
-            
+            # Handle specific HTTP status codes
             if response.status_code == 404:
                 logger.warning(f"[get_event_with_status] Event {event_id} not found")
                 return None, TripleSeatFailureType.RESOURCE_NOT_FOUND
             elif response.status_code == 401:
                 logger.error(f"[get_event_with_status] OAuth 1.0 authentication failed (401)")
                 return None, TripleSeatFailureType.AUTHORIZATION_DENIED
+            elif response.status_code == 403:
+                logger.error(f"[get_event_with_status] OAuth 1.0 access forbidden (403)")
+                return None, TripleSeatFailureType.AUTHORIZATION_DENIED
             elif response.status_code != 200:
-                logger.error(f"[get_event_with_status] HTTP {response.status_code}: {body_preview}")
+                logger.error(f"[get_event_with_status] HTTP {response.status_code}: Unexpected status")
                 return None, TripleSeatFailureType.API_ERROR
             
-            # Safe JSON parsing
-            data = safe_json(response)
-            if data is None:
-                logger.error(f"[get_event_with_status] Failed to parse JSON response")
-                return None, TripleSeatFailureType.API_ERROR
-            
-            logger.info(f"✅ [get_event_with_status] Retrieved event {event_id}")
-            return data.get('event'), response.status_code
+            # Safe JSON parsing with HTML detection
+            try:
+                data = safe_json_response(response)
+                if data is None:
+                    logger.error(f"[get_event_with_status] Failed to parse JSON response")
+                    return None, TripleSeatFailureType.API_ERROR
+                
+                logger.info(f"✅ [get_event_with_status] Retrieved event {event_id}")
+                return data.get('event'), response.status_code
+                
+            except ValueError as e:
+                # HTML responses or JSON decode errors
+                error_msg = str(e)
+                if "HTML_RESPONSE" in error_msg:
+                    logger.error(f"[get_event_with_status] Authentication failed - received HTML login page")
+                    return None, TripleSeatFailureType.AUTHORIZATION_DENIED
+                elif "INVALID_CONTENT_TYPE" in error_msg:
+                    logger.error(f"[get_event_with_status] Invalid content type: {error_msg}")
+                    return None, TripleSeatFailureType.API_ERROR
+                else:
+                    logger.error(f"[get_event_with_status] JSON parsing error: {error_msg}")
+                    return None, TripleSeatFailureType.API_ERROR
             
         except requests.exceptions.HTTPError as e:
             logger.error(f"[get_event_with_status] HTTP error: {e.response.status_code} - {e}")
@@ -174,7 +208,7 @@ class TripleSeatAPIClient:
             
         try:
             # Try a simple API call to verify auth
-            url = f"{self.base_url}/v2/events"
+            url = f"{self.base_url}/v1/events"
             response = self.oauth_session.get(url, timeout=10, params={'limit': 1})
             is_valid = response.status_code == 200
             
