@@ -63,10 +63,10 @@ def safe_json_response(response: requests.Response, request_id: str = None) -> O
         raise ValueError(f"JSON_DECODE_ERROR: {e}")
 
 class TripleSeatAPIClient:
-    """TripleSeat API Client - OAuth 1.0 Implementation with Bearer-like Headers.
+    """TripleSeat API Client - OAuth 1.0 Authentication.
     
     Uses OAuth 1.0 (signature-based authentication) for secure API access.
-    Ensures ALL API calls include proper authentication headers and JSON content-type.
+    Ensures ALL API calls include proper OAuth 1.0 signature headers.
     """
     
     def __init__(self):
@@ -137,7 +137,7 @@ class TripleSeatAPIClient:
     def get_event_with_status(self, event_id: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Fetch event and return tuple with status code.
         
-        Uses OAuth 1.0 authentication with proper headers.
+        Uses OAuth 1.0 authentication.
         Explicitly rejects HTML responses and validates JSON content.
         
         Args:
