@@ -219,7 +219,15 @@ class RevelAPIClient:
             order_uri = created_order.get('resource_uri')
             logger.info(f"✅ Order created: ID={order_id}, URI={order_uri}")
             
-            # Step 2: Add line items
+            # Step 2: Apply Triple Seat discount BEFORE adding items (so it calculates correctly)
+            if discount_amount and discount_amount > 0:
+                discount_success = self._apply_discount(order_uri, discount_amount, now, headers)
+                if discount_success:
+                    logger.info(f"  ✅ Triple Seat Discount applied: ${discount_amount}")
+                else:
+                    logger.warning(f"  ⚠️ Failed to apply discount (order still created)")
+            
+            # Step 3: Add line items
             items_url = f"{self.base_url}/resources/OrderItem/"
             created_items = []
             
@@ -257,14 +265,6 @@ class RevelAPIClient:
                     logger.info(f"  ✅ Item added: {item_response.json().get('id')}")
                 else:
                     logger.error(f"  ❌ Failed to add item: {item_response.text[:200]}")
-            
-            # Step 3: Apply Triple Seat discount if discount_amount provided
-            if discount_amount and discount_amount > 0:
-                discount_success = self._apply_discount(order_uri, discount_amount, now, headers)
-                if discount_success:
-                    logger.info(f"  ✅ Triple Seat Discount applied: ${discount_amount}")
-                else:
-                    logger.warning(f"  ⚠️ Failed to apply discount (order still created)")
             
             # Step 4: Apply Triple Seat payment
             payment_amount = order_data.get('payment_amount', 0)
@@ -359,13 +359,15 @@ class RevelAPIClient:
     def _apply_discount(self, order_uri: str, amount: float, now: str, headers: Dict[str, str]) -> bool:
         """Apply Triple Seat Discount to an order by updating order fields."""
         try:
-            # Discount is applied by PATCH to the order, not by creating a separate record
+            # Set the discount and discount_amount on the order
+            # This will trigger Revel to create an AppliedDiscountOrder record
             discount_data = {
                 'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',
                 'discount_amount': amount,
             }
             url = f"{self.base_url}{order_uri}"
             response = requests.patch(url, headers=headers, json=discount_data)
+            logger.debug(f"Applied discount PATCH - status {response.status_code}, response: {response.text[:200] if response.status_code not in [200, 202] else 'OK'}")
             return response.status_code in [200, 202]
         except Exception as e:
             logger.error(f"Failed to apply discount: {e}")
