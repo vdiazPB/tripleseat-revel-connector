@@ -219,15 +219,7 @@ class RevelAPIClient:
             order_uri = created_order.get('resource_uri')
             logger.info(f"✅ Order created: ID={order_id}, URI={order_uri}")
             
-            # Step 2: Apply Triple Seat discount BEFORE adding items (so it calculates correctly)
-            if discount_amount and discount_amount > 0:
-                discount_success = self._apply_discount(order_uri, discount_amount, now, headers)
-                if discount_success:
-                    logger.info(f"  ✅ Triple Seat Discount applied: ${discount_amount}")
-                else:
-                    logger.warning(f"  ⚠️ Failed to apply discount (order still created)")
-            
-            # Step 3: Add line items
+            # Step 2: Add line items
             items_url = f"{self.base_url}/resources/OrderItem/"
             created_items = []
             
@@ -266,6 +258,14 @@ class RevelAPIClient:
                 else:
                     logger.error(f"  ❌ Failed to add item: {item_response.text[:200]}")
             
+            # Step 3: Apply Triple Seat discount AFTER items are added (so amount is calculated correctly)
+            if discount_amount and discount_amount > 0:
+                discount_success = self._apply_discount(order_uri, discount_amount, now, headers)
+                if discount_success:
+                    logger.info(f"  ✅ Triple Seat Discount applied: ${discount_amount}")
+                else:
+                    logger.warning(f"  ⚠️ Failed to apply discount (order still created)")
+            
             # Step 4: Apply Triple Seat payment
             payment_amount = order_data.get('payment_amount', 0)
             if payment_amount and payment_amount > 0:
@@ -281,6 +281,7 @@ class RevelAPIClient:
             # So: final_total = payment_amount, subtotal = final_total + discount_amount
             final_total = float(payment_amount) if payment_amount else 0
             subtotal = float(payment_amount) + float(discount_amount) if payment_amount else 0
+            logger.info(f"Finalizing: discount_amount={discount_amount}, final_total={final_total}, subtotal={subtotal}")
             finalize_success = self._finalize_order(order_uri, subtotal, discount_amount, final_total, headers)
             if finalize_success:
                 logger.info(f"  ✅ Order finalized and closed (will appear in Revel UI)")
@@ -305,20 +306,24 @@ class RevelAPIClient:
         try:
             url = f"{self.base_url}{order_uri}"
             
+            logger.info(f"_finalize_order called with: subtotal={subtotal}, discount_amount={discount_amount}, final_total={final_total}")
+            
             finalize_data = {
                 'subtotal': subtotal,  # Amount before discount
-                'discount_amount': discount_amount,  # Discount that was applied
                 'final_total': final_total,  # Amount after discount
                 'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',  # Ensure discount reference is set
                 'closed': True,  # Close the order so it appears in history
                 'printed': True,  # Mark as printed
+                # Note: NOT including discount_amount here - Revel may calculate it from AppliedDiscountOrder
             }
             
-            logger.debug(f"Finalizing order - subtotal=${subtotal}, discount=${discount_amount}, final=${final_total}")
+            logger.info(f"Finalizing order - sending: {finalize_data}")
             response = requests.patch(url, headers=headers, json=finalize_data)
             
             if response.status_code in [200, 202]:
-                logger.debug(f"✅ Order finalized successfully")
+                resp_data = response.json()
+                logger.info(f"✅ Order finalized successfully")
+                logger.info(f"Response discount_amount: {resp_data.get('discount_amount')}")
                 return True
             else:
                 logger.error(f"Failed to finalize order: HTTP {response.status_code}")
