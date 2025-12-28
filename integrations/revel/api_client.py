@@ -276,7 +276,9 @@ class RevelAPIClient:
                     logger.warning(f"  ⚠️ Failed to apply payment (order still created)")
             
             # Step 5: Finalize order - set totals and close it so it appears in UI
-            finalize_success = self._finalize_order(order_uri, payment_amount, headers)
+            # Calculate subtotal: payment_amount + discount_amount
+            subtotal = float(payment_amount) + float(discount_amount) if payment_amount else 0
+            finalize_success = self._finalize_order(order_uri, subtotal, discount_amount, payment_amount, headers)
             if finalize_success:
                 logger.info(f"  ✅ Order finalized and closed (will appear in Revel UI)")
             
@@ -292,7 +294,7 @@ class RevelAPIClient:
                 logger.error(f"Response body: {e.response.text[:500]}")
             return None
 
-    def _finalize_order(self, order_uri: str, final_total: float, headers: Dict[str, str]) -> bool:
+    def _finalize_order(self, order_uri: str, subtotal: float, discount_amount: float, final_total: float, headers: Dict[str, str]) -> bool:
         """Finalize an order by setting totals and closing it.
         
         This makes the order visible in the Revel UI Order History.
@@ -301,13 +303,14 @@ class RevelAPIClient:
             url = f"{self.base_url}{order_uri}"
             
             finalize_data = {
-                'final_total': final_total,
-                'subtotal': final_total,  # For simplicity, subtotal = final_total (no tax applied)
+                'subtotal': subtotal,  # Amount before discount
+                'discount_amount': discount_amount,  # Discount that was applied
+                'final_total': final_total,  # Amount after discount
                 'closed': True,  # Close the order so it appears in history
                 'printed': True,  # Mark as printed
             }
             
-            logger.debug(f"Finalizing order - setting totals and closed flag")
+            logger.debug(f"Finalizing order - subtotal=${subtotal}, discount=${discount_amount}, final=${final_total}")
             response = requests.patch(url, headers=headers, json=finalize_data)
             
             if response.status_code in [200, 202]:
