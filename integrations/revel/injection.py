@@ -66,17 +66,14 @@ def inject_order(
     
     external_order_id = f"tripleseat_event_{event_id}"
 
-    # Get event data - prefer webhook_payload if provided (avoid API call)
-    if webhook_payload and 'event' in webhook_payload:
-        logger.info(f"[req-{correlation_id}] Using event data from webhook payload (no API fetch)")
-        event_data = {'event': webhook_payload['event']}
-    else:
-        logger.info(f"[req-{correlation_id}] Fetching event data from TripleSeat API")
-        ts_client = TripleSeatAPIClient()
-        event_data = ts_client.get_event(event_id)
-        if not event_data:
-            logger.error(f"[req-{correlation_id}] Failed to fetch event data for event_id={event_id}")
-            return InjectionResult(False, error="Failed to fetch event data")
+    # Always fetch full event details from API to get line items/invoice data
+    # (webhook payload only has basic event info)
+    logger.info(f"[req-{correlation_id}] Fetching full event data from TripleSeat API (for items/invoice)")
+    ts_client = TripleSeatAPIClient()
+    event_data = ts_client.get_event(event_id)
+    if not event_data:
+        logger.error(f"[req-{correlation_id}] Failed to fetch event data for event_id={event_id}")
+        return InjectionResult(False, error="Failed to fetch event data")
 
     event = event_data.get("event", {})
     site_id = event.get("site_id")
