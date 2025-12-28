@@ -1,6 +1,6 @@
 import logging
-from .api_client import RevelAPIClient
-from .mappings import get_revel_establishment, get_dining_option_id, get_payment_type_id, get_discount_id
+from integrations.revel.api_client import RevelAPIClient
+from integrations.revel.mappings import get_revel_establishment, get_dining_option_id, get_payment_type_id, get_discount_id
 from integrations.tripleseat.api_client import TripleSeatAPIClient
 from integrations.tripleseat.models import InjectionResult, OrderDetails
 
