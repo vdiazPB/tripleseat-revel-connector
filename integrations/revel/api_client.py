@@ -12,7 +12,10 @@ class RevelAPIClient:
     def __init__(self):
         self.api_key = os.getenv('REVEL_API_KEY')
         self.api_secret = os.getenv('REVEL_API_SECRET')
-        self.domain = os.getenv('REVEL_DOMAIN', '')
+        self.domain = os.getenv('REVEL_DOMAIN', '').strip()
+        # Validate domain is set
+        if not self.domain:
+            logger.error("❌ REVEL_DOMAIN environment variable is not set!")
         # Handle domain that may or may not include .revelup.com
         if self.domain.endswith('.revelup.com'):
             self.base_url = f"https://{self.domain}"
@@ -54,6 +57,8 @@ class RevelAPIClient:
 
         try:
             logger.info(f"Fetching products from Revel for establishment {establishment}")
+            logger.debug(f"  Full URL: {url}")
+            logger.debug(f"  Params: {params}")
             response = requests.get(url, headers=headers, params=params)
             response.raise_for_status()
             data = response.json()
@@ -62,10 +67,16 @@ class RevelAPIClient:
             # Cache the results
             self._product_cache[cache_key] = products
             return products
+        except requests.exceptions.InvalidURL as e:
+            logger.error(f"INVALID URL - Failed to fetch products for establishment {establishment}: {e}")
+            logger.error(f"  base_url: '{self.base_url}'")
+            logger.error(f"  Full URL would be: {url}")
+            return []
         except requests.RequestException as e:
             logger.error(f"Failed to fetch products for establishment {establishment}: {e}")
             logger.error(f"  URL attempted: {url}")
             logger.error(f"  Params: {params}")
+            return []
             return []
 
     def resolve_product_by_name(self, establishment: str, product_name: str) -> Optional[Dict[str, Any]]:
