@@ -276,9 +276,12 @@ class RevelAPIClient:
                     logger.warning(f"  ⚠️ Failed to apply payment (order still created)")
             
             # Step 5: Finalize order - set totals and close it so it appears in UI
-            # Calculate subtotal: payment_amount + discount_amount
+            # Calculate subtotal from items, not from payment/discount amounts
+            # The payment_amount passed in is already the final_total after discount
+            # So: final_total = payment_amount, subtotal = final_total + discount_amount
+            final_total = float(payment_amount) if payment_amount else 0
             subtotal = float(payment_amount) + float(discount_amount) if payment_amount else 0
-            finalize_success = self._finalize_order(order_uri, subtotal, discount_amount, payment_amount, headers)
+            finalize_success = self._finalize_order(order_uri, subtotal, discount_amount, final_total, headers)
             if finalize_success:
                 logger.info(f"  ✅ Order finalized and closed (will appear in Revel UI)")
             
