@@ -181,12 +181,13 @@ class RevelAPIClient:
         pst = pytz.timezone('America/Los_Angeles')
         now_pst = datetime.now(pst)
         
-        # Send as PST with timezone offset (-08:00 or -07:00 for DST)
-        # This tells Revel the timestamp is in PST, so it displays as 12/28 not 12/29
-        now = now_pst.isoformat()  # Format: 2025-12-28T22:59:56-08:00
+        # Format as PST local time without Z suffix
+        # Revel will interpret as local store time (PST) and show correct date
+        now = now_pst.strftime('%Y-%m-%dT%H:%M:%S')  # 2025-12-28T23:13:24 (local PST)
+        now_iso = now  # Same format for backwards compatibility
         
         logger.info(f"PST Time: {now_pst.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-        logger.info(f"Sending to Revel as PST with offset: {now}")
+        logger.info(f"Sending to Revel as PST (local): {now}")
         logger.info(f"Customer info - Name: '{customer_name}', Phone: '{customer_phone}'")
         
         order_uuid = str(uuid.uuid4())
