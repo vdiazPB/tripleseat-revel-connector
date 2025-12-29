@@ -284,7 +284,7 @@ class RevelAPIClient:
             final_total = float(payment_amount) if payment_amount else 0
             subtotal = float(payment_amount) + float(discount_amount) if payment_amount else 0
             logger.info(f"Finalizing: discount_amount={discount_amount}, final_total={final_total}, subtotal={subtotal}")
-            finalize_success = self._finalize_order(order_uri, subtotal, discount_amount, final_total, headers, now_iso)
+            finalize_success = self._finalize_order(order_uri, subtotal, discount_amount, final_total, headers, now)
             if finalize_success:
                 logger.info(f"  ✅ Order finalized and closed (will appear in Revel UI)")
             
