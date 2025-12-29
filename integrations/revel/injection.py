@@ -292,6 +292,14 @@ def inject_order(
     invoice_total = billing_invoice.get("total", 0) if billing_invoice else 0
     invoice_subtotal = billing_invoice.get("subtotal", 0) if billing_invoice else 0
     
+    # Log all billing invoice fields for debugging
+    if billing_invoice:
+        logger.info(f"[req-{correlation_id}] Billing Invoice Fields:")
+        for key in sorted(billing_invoice.keys()):
+            val = billing_invoice.get(key)
+            if not isinstance(val, (dict, list)):
+                logger.info(f"[req-{correlation_id}]   {key}: {val}")
+    
     # If invoice has no pricing, use our calculated subtotal
     if invoice_subtotal == 0 and subtotal > 0:
         invoice_subtotal = subtotal
