@@ -18,6 +18,8 @@ order_data = {
     'establishment': '4',
     'local_id': 'Triple Seat 55521609',  # Use Triple Seat event format
     'notes': 'Discount Test Order',
+    'customer_name': 'Jon Ponder',  # Customer name from Triple Seat
+    'customer_phone': '(555) 123-4567',  # Customer phone from Triple Seat
     'items': [
         {
             'product_id': 579,  # TRIPLE OG

@@ -258,6 +258,10 @@ def inject_order(
     
     # Calculate discount if invoice total is less than subtotal
     discount_amount = subtotal - invoice_total if invoice_total < subtotal else 0
+    
+    # Get customer name and phone from event
+    customer_name = event.get("name", "")  # Event guest name
+    customer_phone = event.get("phone", "")  # Event phone number
 
     # Build order data with resolved items - use new format expected by create_order()
     # Uses Triple Seat configuration: Pinkbox menu, Triple Seat dining option,
@@ -269,6 +273,8 @@ def inject_order(
         "items": resolved_items,  # List of {product_id, quantity, price}
         "discount_amount": discount_amount,  # Triple Seat Discount
         "payment_amount": invoice_total,  # Triple Seat Payment
+        "customer_name": customer_name,  # Guest name from Triple Seat
+        "customer_phone": customer_phone,  # Phone from Triple Seat
     }
 
     logger.info(f"[req-{correlation_id}] [INJECTION] Creating order with {len(resolved_items)} items in establishment {establishment}")
