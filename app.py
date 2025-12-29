@@ -2,11 +2,13 @@ from fastapi import FastAPI, Request, HTTPException, Query
 import logging
 from integrations.tripleseat.webhook_handler import handle_tripleseat_webhook
 from integrations.revel.api_client import RevelAPIClient
+from integrations.admin.dashboard import get_settings_endpoints
 import os
 from dotenv import load_dotenv
 from datetime import datetime
 import pytz
 import uuid
+from contextlib import asynccontextmanager
 
 # Trigger redeploy - location 15691 config updated
 
@@ -17,7 +19,82 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="TripleSeat-Revel Connector")
+# Startup & shutdown events for scheduler
+async def startup_event():
+    """Initialize scheduled tasks on app startup."""
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from integrations.tripleseat.sync import TripleSeatSync
+        import requests
+        
+        scheduler = BackgroundScheduler()
+        
+        def scheduled_sync_task():
+            """Background task: sync recent events every 45 minutes."""
+            correlation_id = str(uuid.uuid4())[:8]
+            logger.info(f"[scheduled-{correlation_id}] Starting scheduled sync task")
+            
+            try:
+                sync_url = os.getenv('SYNC_ENDPOINT_URL', 'http://127.0.0.1:8000/api/sync/tripleseat')
+                
+                # Call sync endpoint for recent events (48 hours)
+                response = requests.get(
+                    sync_url,
+                    params={'hours_back': 48},
+                    timeout=120  # 2 minutes timeout for bulk sync
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    logger.info(f"[scheduled-{correlation_id}] Sync completed - "
+                               f"Queried: {result.get('summary', {}).get('queried', 0)}, "
+                               f"Injected: {result.get('summary', {}).get('injected', 0)}, "
+                               f"Skipped: {result.get('summary', {}).get('skipped', 0)}, "
+                               f"Failed: {result.get('summary', {}).get('failed', 0)}")
+                else:
+                    logger.error(f"[scheduled-{correlation_id}] Sync endpoint returned {response.status_code}")
+            except Exception as e:
+                logger.error(f"[scheduled-{correlation_id}] Scheduled sync failed: {e}")
+        
+        # Schedule task to run every 45 minutes
+        scheduler.add_job(
+            scheduled_sync_task,
+            'interval',
+            minutes=45,
+            id='tripleseat_sync',
+            name='TripleSeat Scheduled Sync',
+            replace_existing=True
+        )
+        
+        scheduler.start()
+        logger.info("APScheduler initialized - TripleSeat sync scheduled every 45 minutes")
+        
+        # Store scheduler in app state for potential cleanup
+        app.scheduler = scheduler
+        
+    except ImportError:
+        logger.warning("APScheduler not installed - skipping scheduled sync task")
+    except Exception as e:
+        logger.error(f"Failed to initialize scheduler: {e}")
+
+async def shutdown_event():
+    """Clean up scheduled tasks on app shutdown."""
+    if hasattr(app, 'scheduler'):
+        app.scheduler.shutdown()
+        logger.info("APScheduler shut down")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage app lifecycle - startup and shutdown."""
+    await startup_event()
+    yield
+    await shutdown_event()
+
+app = FastAPI(title="TripleSeat-Revel Connector", lifespan=lifespan)
+
+# Include admin dashboard router
+admin_router = get_settings_endpoints()
+app.include_router(admin_router)
 
 # Startup logging & production safety flags
 env = os.getenv('ENV', 'development')
@@ -267,6 +344,114 @@ def debug_order(order_id: str):
         logger.error(f"Debug order lookup failed: {e}")
         return {
             "order_id": order_id,
+            "error": str(e)
+        }
+
+@app.get("/api/sync/tripleseat")
+def sync_tripleseat(
+    event_id: str | None = Query(None),
+    hours_back: int = Query(48)
+):
+    """Reconciliation endpoint - sync TripleSeat events to Revel.
+    
+    Supports two modes:
+    1. Single event sync: GET /api/sync/tripleseat?event_id=55521609
+    2. Recent events sync: GET /api/sync/tripleseat?hours_back=48
+    
+    Query Parameters:
+        event_id: Optional - specific event to sync
+        hours_back: Optional - sync events from past N hours (default 48)
+    
+    Returns:
+        {
+            "success": bool,
+            "mode": "single" | "bulk",
+            "summary": {
+                "queried": int,
+                "injected": int,
+                "skipped": int,
+                "failed": int
+            },
+            "events": [
+                {
+                    "id": str,
+                    "name": str,
+                    "date": str,
+                    "status": "injected" | "skipped" | "failed",
+                    "revel_order_id": str | null,
+                    "reason": str | null,
+                    "error": str | null
+                }
+            ]
+        }
+    """
+    from integrations.tripleseat.sync import TripleSeatSync
+    
+    correlation_id = str(uuid.uuid4())[:8]
+    
+    try:
+        # Get configuration from environment
+        site_id = int(os.getenv('TRIPLESEAT_SITE_ID', '15691'))
+        establishment = os.getenv('REVEL_ESTABLISHMENT_ID', '4')
+        location_id = os.getenv('REVEL_LOCATION_ID', '1')
+        
+        # Initialize sync engine
+        sync = TripleSeatSync(site_id, establishment, location_id)
+        
+        logger.info(f"[sync-{correlation_id}] Sync request - event_id={event_id}, hours_back={hours_back}")
+        
+        if event_id:
+            # Single event sync
+            logger.info(f"[sync-{correlation_id}] Single event mode: {event_id}")
+            result = sync.sync_event(event_id, correlation_id=correlation_id)
+            
+            return {
+                "success": result.get("success", False),
+                "mode": "single",
+                "summary": {
+                    "queried": 1,
+                    "injected": 1 if result.get("success") else 0,
+                    "skipped": 0 if result.get("success") else 1,
+                    "failed": 0
+                },
+                "events": [{
+                    "id": event_id,
+                    "name": result.get("event_name", "unknown"),
+                    "date": result.get("event_date", "unknown"),
+                    "status": "injected" if result.get("success") else (result.get("status", "failed")),
+                    "revel_order_id": result.get("revel_order_id"),
+                    "reason": result.get("reason"),
+                    "error": result.get("error")
+                }]
+            }
+        else:
+            # Bulk recent events sync
+            logger.info(f"[sync-{correlation_id}] Bulk events mode: hours_back={hours_back}")
+            result = sync.sync_recent_events(hours_back=hours_back, correlation_id=correlation_id)
+            
+            return {
+                "success": result.get("failed", 0) == 0,
+                "mode": "bulk",
+                "summary": {
+                    "queried": result.get("queried", 0),
+                    "injected": result.get("injected", 0),
+                    "skipped": result.get("skipped", 0),
+                    "failed": result.get("failed", 0)
+                },
+                "events": result.get("events", [])
+            }
+    
+    except Exception as e:
+        logger.error(f"[sync-{correlation_id}] Sync failed: {e}", exc_info=True)
+        return {
+            "success": False,
+            "mode": "error",
+            "summary": {
+                "queried": 0,
+                "injected": 0,
+                "skipped": 0,
+                "failed": 0
+            },
             "error": str(e)
         }
 
