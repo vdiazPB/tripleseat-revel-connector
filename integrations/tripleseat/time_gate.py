@@ -46,8 +46,6 @@ def check_time_gate(event_id: str, correlation_id: str = None, event_data: dict 
         event = response.get("event", {})
     
     event_date_str = event.get("event_date")
-    event_start_str = event.get("event_start")  # e.g. "12/28/2025 9:00 AM"
-    event_start_utc = event.get("event_start_utc")  # ISO format backup
     site_id = event.get("site_id")
 
     if not event_date_str or not site_id:
@@ -70,55 +68,24 @@ def check_time_gate(event_id: str, correlation_id: str = None, event_data: dict 
         logger.error(f"Cannot parse event date: {event_date_str}")
         return "INVALID_DATE_FORMAT"
 
-    # Get current time in site timezone
-    # For simplicity, assume UTC for now - in production, use proper timezone handling
-    now = datetime.now()
-    now_date = now.date()
+    # Get current date in site timezone
+    now_date = datetime.now().date()
 
+    # Simple date-based logic:
+    # - Inject if event date is today
+    # - Hold (TOO_EARLY) if event date is in the future
+    # - Block (EVENT_DAY_PASSED) if event date is in the past
+    
     if now_date < event_date:
+        logger.info(f"Event date {event_date} is in the future (today is {now_date}) - TOO_EARLY to inject")
         return "TOO_EARLY"
     elif now_date > event_date:
+        logger.warning(f"Event date {event_date} is in the past (today is {now_date}) - cannot inject")
         return "EVENT_DAY_PASSED"
     else:
-        # Same day - check if event has already started
-        # Try to parse event start time to see if event has passed
-        if event_start_str or event_start_utc:
-            try:
-                # Try event_start_utc first (ISO format)
-                if event_start_utc:
-                    event_start_dt = datetime.fromisoformat(event_start_utc.replace('Z', '+00:00'))
-                    event_start_time = event_start_dt.time()
-                elif event_start_str:
-                    # Parse "12/28/2025 9:00 AM" format
-                    event_start_dt = datetime.strptime(event_start_str, "%m/%d/%Y %I:%M %p")
-                    event_start_time = event_start_dt.time()
-                else:
-                    event_start_time = None
-                
-                current_time = now.time()
-                
-                if event_start_time and current_time >= event_start_time:
-                    logger.warning(f"Event has already started at {event_start_time}, current time is {current_time}")
-                    return "EVENT_ALREADY_STARTED"
-                else:
-                    logger.info(f"Event starts at {event_start_time}, current time is {current_time} - gate OPEN")
-                    return "PROCEED"
-            except (ValueError, AttributeError) as e:
-                logger.warning(f"Could not parse event start time, allowing injection: {e}")
-                return "PROCEED"
-        else:
-            # No event start time available, use daily time window
-            # Check time window: 12:01 AM to 11:59:59 PM
-            current_time = now.time()
-            start_time = time(0, 1, 0)   # 12:01:00 AM
-            end_time = time(23, 59, 59)  # 11:59:59 PM
-
-            if start_time <= current_time <= end_time:
-                logger.info(f"Time gate OPEN: {current_time} is within {start_time} to {end_time}")
-                return "PROCEED"
-            else:
-                logger.warning(f"Time gate CLOSED: {current_time} is outside {start_time} to {end_time}")
-                return "OUTSIDE_TIME_WINDOW"
+        # Event date matches today - PROCEED
+        logger.info(f"Event date {event_date} matches today - PROCEED with injection")
+        return "PROCEED"
 
 def get_site_timezone(site_id: str) -> Optional[str]:
     """Get timezone for site from config."""
