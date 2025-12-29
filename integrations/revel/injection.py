@@ -147,7 +147,7 @@ def inject_order(
                         instead of fetching from TripleSeat API (more efficient).
     """
     
-    external_order_id = f"tripleseat_event_{event_id}"
+    external_order_id = f"Triple Seat {event_id}"
 
     # Always fetch full event details from API to get line items/invoice data
     # (webhook payload only has basic event info)

@@ -16,7 +16,7 @@ client = RevelAPIClient()
 # Simple order with clear discount
 order_data = {
     'establishment': '4',
-    'local_id': 'discount_test_' + str(os.urandom(4).hex()),
+    'local_id': 'Triple Seat 55521609',  # Use Triple Seat event format
     'notes': 'Discount Test Order',
     'items': [
         {
