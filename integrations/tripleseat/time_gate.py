@@ -3,6 +3,7 @@ import json
 import os
 from datetime import datetime, time
 from typing import Optional
+import pytz
 from integrations.tripleseat.api_client import TripleSeatAPIClient, TripleSeatFailureType
 
 logger = logging.getLogger(__name__)
@@ -69,10 +70,14 @@ def check_time_gate(event_id: str, correlation_id: str = None, event_data: dict 
         return "INVALID_DATE_FORMAT"
 
     # Get current date in site timezone
-    now_date = datetime.now().date()
+    tz = pytz.timezone(timezone)
+    now_pst = datetime.now(tz)
+    now_date = now_pst.date()
+    
+    logger.info(f"Timezone: {timezone}, Current time in site TZ: {now_pst.strftime('%Y-%m-%d %H:%M:%S %Z')}")
 
     # Simple date-based logic:
-    # - Inject if event date is today
+    # - Inject if event date is today (in site timezone)
     # - Hold (TOO_EARLY) if event date is in the future
     # - Block (EVENT_DAY_PASSED) if event date is in the past
     
