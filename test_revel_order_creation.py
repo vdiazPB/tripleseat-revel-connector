@@ -47,9 +47,19 @@ created_order = client.create_order(order_data)
 
 if created_order:
     print(f"\n✅ ORDER CREATED SUCCESSFULLY!")
-    print(f"Order ID: {created_order.get('id')}")
+    order_id = created_order.get('id')
+    print(f"Order ID: {order_id}")
     print(f"Order URI: {created_order.get('resource_uri')}")
     print(f"Items created: {len(created_order.get('items', []))}")
+    
+    # Open/activate the order so it appears in Revel UI
+    print(f"\nOpening order {order_id} to activate it in Revel UI...")
+    opened = client.open_order(str(order_id))
+    if opened:
+        print(f"✅ Order {order_id} opened and activated - it should now be visible in Revel")
+    else:
+        print(f"⚠️ Failed to open order {order_id}, but it may still be visible")
+    
     print(f"\nFull response:")
     import json
     print(json.dumps(created_order, indent=2, default=str))

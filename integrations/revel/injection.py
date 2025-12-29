@@ -277,14 +277,17 @@ def inject_order(
     if invoice_total > 0:
         logger.info(f"[req-{correlation_id}] [INJECTION] Applying Triple Seat Payment: ${invoice_total}")
 
-    # Create order using WebOrders API (handles all field validation automatically)
-    created_order = revel_client.create_order_via_weborders(order_data)
+    # Create order using direct API (handles all items and details)
+    created_order = revel_client.create_order(order_data)
     if not created_order:
-        logger.error(f"[req-{correlation_id}] [INJECTION FAILED] Failed to create order in Revel via WebOrders")
+        logger.error(f"[req-{correlation_id}] [INJECTION FAILED] Failed to create order in Revel")
         return InjectionResult(False, error="Failed to create order in Revel")
 
-    order_id = created_order.get('id') or created_order.get('order_id')
-    logger.info(f"[req-{correlation_id}] [INJECTION SUCCESS] Order created via WebOrders: {order_id}")
+    order_id = created_order.get('id')
+    logger.info(f"[req-{correlation_id}] [INJECTION SUCCESS] Order created: {order_id}")
+    
+    # Open the order so it appears in Revel UI
+    revel_client.open_order(str(order_id))
 
     # Build order details for email
     order_details = OrderDetails(

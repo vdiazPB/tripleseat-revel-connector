@@ -29,6 +29,7 @@ class RevelAPIClient:
         # Use 1 (atlasadmin - standard service account) for integration/API orders
         self.default_user_id = os.getenv('REVEL_DEFAULT_USER_ID', '1')
         self.default_pos_station_id = os.getenv('REVEL_DEFAULT_POS_STATION_ID', '4')
+        logger.info(f"🔧 Using default_user_id={self.default_user_id}")
         
         # Triple Seat specific configuration
         # Pinkbox CustomMenu: ID 2340, ProductGroup: ID 4425
@@ -419,6 +420,8 @@ class RevelAPIClient:
                 'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',
                 'discount_amount': amount,  # This is the actual discount amount to apply
                 'discount_rule_amount': amount,  # Also try setting rule_amount
+                'discount_reason': 'Triple Seat Discount',  # Set discount reason for display
+                'discounted_by': f'/enterprise/User/{self.default_user_id}/',  # Track who applied discount
             }
             url = f"{self.base_url}{order_uri}"
             logger.debug(f"Applying discount: {discount_data}")
