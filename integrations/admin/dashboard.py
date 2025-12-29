@@ -1,6 +1,6 @@
 """Settings and dashboard UI with persistent JSON storage."""
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Body
 from fastapi.responses import HTMLResponse
 import os
 import json
@@ -96,12 +96,23 @@ def get_config():
 
 
 @router.post("/api/config")
-def update_config(config: Dict[str, Any]):
+async def update_config(request_data: Dict[str, Any]):
     """Update configuration and save to JSON."""
     try:
-        save_settings(config)
+        # Merge with existing settings
+        current = load_settings()
+        
+        # Update with new values
+        if "establishment_mapping" in request_data:
+            current["establishment_mapping"].update(request_data["establishment_mapping"])
+        if "sync_settings" in request_data:
+            current["sync_settings"].update(request_data["sync_settings"])
+        
+        save_settings(current)
+        logger.info("Settings updated and saved to JSON")
         return {"success": True, "message": "Settings saved to settings.json"}
     except Exception as e:
+        logger.error(f"Error updating config: {e}")
         return {"success": False, "error": str(e)}
 
 
@@ -308,7 +319,10 @@ def get_dashboard_html() -> str:
         
         function refreshStatus() {
             fetch("/admin/api/status")
-                .then(r => r.json())
+                .then(r => {
+                    if (!r.ok) throw new Error("HTTP " + r.status);
+                    return r.json();
+                })
                 .then(data => {
                     var status = data.connector.enabled ? "✓ Enabled" : "✗ Disabled";
                     var mode = data.connector.mode === "dry_run" ? "🧪 Dry Run" : "🚀 Production";
@@ -317,7 +331,10 @@ def get_dashboard_html() -> str:
                     document.getElementById("connTimezone").textContent = data.connector.timezone;
                     document.getElementById("settingsFile").textContent = data.settings_file_exists ? "✓ settings.json (persisted)" : "📄 settings.json (not found, using defaults)";
                 })
-                .catch(e => console.error("Error:", e));
+                .catch(e => {
+                    console.error("Status error:", e);
+                    document.getElementById("connStatus").textContent = "Error: " + e.message;
+                });
         }
         
         function saveEstablishmentMapping() {
