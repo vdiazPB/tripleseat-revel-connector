@@ -338,12 +338,12 @@ class RevelAPIClient:
                 'final_total': final_total,  # Amount after discount
                 'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',  # Ensure discount reference is set
                 'opened': True,  # Always opened=True to make visible in Revel UI
-                'closed': is_fully_paid,  # Close if fully paid, otherwise open
                 'printed': True,  # Mark as printed
                 # Note: NOT including discount_amount here - Revel may calculate it from AppliedDiscountOrder
+                # Note: 'closed' appears to be read-only - Revel calculates it based on remaining_due
             }
             
-            status_msg = "closed" if is_fully_paid else "open"
+            status_msg = "closed (fully paid)" if is_fully_paid else "open (balance remaining)"
             logger.info(f"Finalizing order - sending: {finalize_data}")
             logger.info(f"Order status: {status_msg} (fully_paid={is_fully_paid})")
             response = requests.patch(url, headers=headers, json=finalize_data)
@@ -368,7 +368,7 @@ class RevelAPIClient:
                 
                 # Create OrderHistory record so order appears in Order History UI
                 logger.info("Creating OrderHistory record...")
-                self._create_order_history(order_uri, headers, opened_at)
+                self._create_order_history(order_uri, headers, opened_at, is_fully_paid)
                 
                 return True
             else:
@@ -379,10 +379,11 @@ class RevelAPIClient:
             logger.error(f"Failed to finalize order: {e}")
             return False
 
-    def _create_order_history(self, order_uri: str, headers: Dict[str, str], opened_at: str) -> bool:
+    def _create_order_history(self, order_uri: str, headers: Dict[str, str], opened_at: str, is_fully_paid: bool = False) -> bool:
         """Create an OrderHistory record for the order to make it appear in Order History UI.
         
         OrderHistory records are required for orders to display in Revel's Order History UI.
+        If order is fully paid, set the closed timestamp to mark it as closed.
         """
         try:
             history_url = f"{self.base_url}/resources/OrderHistory/"
@@ -393,6 +394,11 @@ class RevelAPIClient:
                 'order_opened_at': f'/resources/PosStation/{self.default_pos_station_id}/',
                 'opened': opened_at,  # Timestamp from screenshot format: YYYY-MM-DDTHH:MM:SS
             }
+            
+            # If order is fully paid, set closed timestamp
+            if is_fully_paid:
+                history_data['closed'] = opened_at  # Mark as closed at same time it opened (for paid orders)
+                logger.info(f"Order is fully paid - setting closed timestamp in OrderHistory")
             
             logger.debug(f"Creating OrderHistory: {history_data}")
             resp = requests.post(history_url, headers=headers, json=history_data)
