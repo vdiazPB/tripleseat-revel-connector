@@ -279,6 +279,9 @@ def inject_order(
     # Get customer name and phone from event
     customer_name = event.get("name", "")  # Event guest name
     customer_phone = event.get("phone", "")  # Event phone number
+    
+    logger.info(f"[req-{correlation_id}] Event name (guest name): '{customer_name}'")
+    logger.info(f"[req-{correlation_id}] Event phone: '{customer_phone}'")
 
     # Build order data with resolved items - use new format expected by create_order()
     # Uses Triple Seat configuration: Pinkbox menu, Triple Seat dining option,

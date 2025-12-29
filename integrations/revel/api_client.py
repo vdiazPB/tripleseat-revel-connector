@@ -165,6 +165,8 @@ class RevelAPIClient:
         Returns:
             Created order dict with all items, or None on failure
         """
+        import pytz
+        
         establishment = order_data.get('establishment')
         notes = order_data.get('notes', '')
         local_id = order_data.get('local_id', '')
@@ -174,9 +176,16 @@ class RevelAPIClient:
         customer_phone = order_data.get('customer_phone', '')  # Optional customer phone (will be converted to int)
         
         headers = self._get_headers()
-        now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')  # Local time for OrderHistory opened field
-        now_iso = datetime.now().isoformat()  # Local time ISO format
+        
+        # Use PST timezone for dates (not UTC server time)
+        pst = pytz.timezone('America/Los_Angeles')
+        now_pst = datetime.now(pst)
+        now = now_pst.strftime('%Y-%m-%dT%H:%M:%S')  # PST time for OrderHistory opened field
+        now_iso = now_pst.isoformat()  # PST time ISO format
         order_uuid = str(uuid.uuid4())
+        
+        logger.info(f"Creating order in PST: {now} (ISO: {now_iso})")
+        logger.info(f"Customer info - Name: '{customer_name}', Phone: '{customer_phone}'")
         
         # Build required fields for order creation
         # Using Triple Seat dining option (ID 113)
