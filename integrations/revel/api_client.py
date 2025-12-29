@@ -96,7 +96,8 @@ class RevelAPIClient:
         # First pass: exact match (case-insensitive)
         for product in products:
             if product.get('name', '').lower() == product_name_lower:
-                logger.info(f"[PRODUCT MATCH - EXACT] '{product_name}' → product_id={product.get('id')}")
+                price = product.get('price', product.get('cost', 0))
+                logger.info(f"[PRODUCT MATCH - EXACT] '{product_name}' → product_id={product.get('id')}, price={price}")
                 return product
         
         # Second pass: fuzzy match (substring + similarity)
@@ -248,6 +249,9 @@ class RevelAPIClient:
             for item in items:
                 item_uuid = str(uuid.uuid4())
                 ts_price = float(item.get('price', 0))  # Triple Seat price per unit
+                qty = item.get('quantity', 1)
+                
+                logger.info(f"Adding item: product_id={item.get('product_id')}, qty={qty}, price=${ts_price}")
                 
                 item_data = {
                     'uuid': item_uuid,
@@ -271,7 +275,7 @@ class RevelAPIClient:
                     'dining_option': self.tripleseat_dining_option_id,  # Triple Seat dining option
                 }
                 
-                logger.info(f"Adding item: product_id={item.get('product_id')}, qty={item.get('quantity')}")
+                logger.info(f"Adding item: product_id={item.get('product_id')}, qty={qty}, price=${ts_price}")
                 item_response = requests.post(items_url, headers=headers, json=item_data)
                 
                 if item_response.status_code in [200, 201]:

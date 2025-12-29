@@ -119,12 +119,17 @@ def resolve_line_items(
         
         if product:
             product_id = product.get('id')
+            # Use Triple Seat price if available, otherwise fall back to Revel product price
+            ts_price = float(ts_item.get('price', 0))
+            revel_price = product.get('price', product.get('cost', 0))
+            final_price = ts_price if ts_price > 0 else revel_price
+            
             resolved_items.append({
                 'product_id': product_id,
                 'quantity': quantity,
-                'price': product.get('price', 0)
+                'price': final_price
             })
-            logger.info(f"[req-{correlation_id}] [ITEM RESOLVED] '{item_name}' → product_id={product_id}, qty={quantity}")
+            logger.info(f"[req-{correlation_id}] [ITEM RESOLVED] '{item_name}' → product_id={product_id}, qty={quantity}, ts_price=${ts_price}, revel_price=${revel_price}, final_price=${final_price}")
         else:
             logger.warning(f"[req-{correlation_id}] [ITEM SKIPPED] '{item_name}' not found in Revel – skipping")
     
@@ -252,9 +257,21 @@ def inject_order(
         logger.warning(f"[req-{correlation_id}] No items resolved – acknowledging event safely (no injection)")
         return InjectionResult(True, error="No items matched - event acknowledged without injection")
 
-    # Get invoice totals (may be None if no billing invoice)
+    # Calculate subtotal from resolved items (quantity × price for each item)
+    subtotal = sum(float(item.get('price', 0)) * int(item.get('quantity', 1)) for item in resolved_items)
+    
+    # Get invoice totals from billing invoice if available, otherwise use calculated subtotal
     invoice_total = billing_invoice.get("total", 0) if billing_invoice else 0
-    subtotal = billing_invoice.get("subtotal", 0) if billing_invoice else 0
+    invoice_subtotal = billing_invoice.get("subtotal", 0) if billing_invoice else 0
+    
+    # If invoice has no pricing, use our calculated subtotal
+    if invoice_subtotal == 0 and subtotal > 0:
+        invoice_subtotal = subtotal
+        logger.info(f"[req-{correlation_id}] Using calculated subtotal ${subtotal} (billing invoice had 0)")
+    
+    if invoice_total == 0 and subtotal > 0:
+        invoice_total = subtotal
+        logger.info(f"[req-{correlation_id}] Using calculated total ${subtotal} (billing invoice had 0)")
     
     # Calculate discount if invoice total is less than subtotal
     discount_amount = subtotal - invoice_total if invoice_total < subtotal else 0
