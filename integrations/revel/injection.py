@@ -178,11 +178,14 @@ def inject_order(
 
     revel_client = RevelAPIClient()
 
-    # Check idempotency
-    existing_order = revel_client.get_order(external_order_id, establishment)
-    if existing_order:
-        logger.info(f"[req-{correlation_id}] Order {external_order_id} already exists – skipping")
-        return InjectionResult(True)  # Exit safely
+    # Check idempotency (skip during testing with location override)
+    if not test_location_override:
+        existing_order = revel_client.get_order(external_order_id, establishment)
+        if existing_order:
+            logger.info(f"[req-{correlation_id}] Order {external_order_id} already exists – skipping")
+            return InjectionResult(True)  # Exit safely
+    else:
+        logger.info(f"[req-{correlation_id}] Order existence check SKIPPED (test_location_override enabled)")
 
     # Get billing data
     documents = event_data.get("documents", [])
