@@ -26,7 +26,8 @@ class RevelAPIClient:
         self._product_cache: Dict[str, Dict[str, Any]] = {}
         
         # Default user and POS station for API orders (configurable via env)
-        self.default_user_id = os.getenv('REVEL_DEFAULT_USER_ID', '209')
+        # Use 1 (atlasadmin - standard service account) for integration/API orders
+        self.default_user_id = os.getenv('REVEL_DEFAULT_USER_ID', '1')
         self.default_pos_station_id = os.getenv('REVEL_DEFAULT_POS_STATION_ID', '4')
         
         # Triple Seat specific configuration
