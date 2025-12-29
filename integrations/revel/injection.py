@@ -12,16 +12,20 @@ from integrations.tripleseat.models import InjectionResult, OrderDetails
 logger = logging.getLogger(__name__)
 
 
-def parse_invoice_for_items(invoice_url: str, correlation_id: str = None) -> List[Dict[str, Any]]:
-    """Fetch and parse TripleSeat invoice HTML to extract line items.
+def parse_invoice_for_items(invoice_url: str, correlation_id: str = None) -> tuple:
+    """Fetch and parse TripleSeat invoice HTML to extract line items and guest name.
     
     Looks for table rows matching pattern: Qty Description Price Total
     Extracts product name before the " - " delimiter (description separator)
+    Also extracts guest name from invoice header
     
     Returns:
-        List of dicts with 'name' and 'quantity' keys
+        Tuple of (items_list, guest_name)
+        items_list: List of dicts with 'name' and 'quantity' keys
+        guest_name: String with guest name or empty string
     """
     req_id = f"[req-{correlation_id}]" if correlation_id else ""
+    guest_name = ""
     
     try:
         logger.info(f"{req_id} Fetching invoice from: {invoice_url}")
@@ -29,7 +33,14 @@ def parse_invoice_for_items(invoice_url: str, correlation_id: str = None) -> Lis
         
         if response.status_code != 200:
             logger.warning(f"{req_id} Invoice fetch failed: HTTP {response.status_code}")
-            return []
+            return [], ""
+        
+        # Extract guest name from invoice HTML
+        # Look for patterns like "CONTACT: Destiny Whitley" or "Attendee: John Smith"
+        guest_match = re.search(r'(?:CONTACT|Attendee|Guest|Name)[\s:]*([A-Za-z\s\.\']+?)(?:<|[\n\r]|<)', response.text, re.IGNORECASE)
+        if guest_match:
+            guest_name = guest_match.group(1).strip()
+            logger.info(f"{req_id} Extracted guest name from invoice: '{guest_name}'")
         
         # Extract table rows
         tr_matches = re.findall(r'<tr[^>]*>(.*?)</tr>', response.text, re.DOTALL | re.IGNORECASE)
@@ -84,11 +95,11 @@ def parse_invoice_for_items(invoice_url: str, correlation_id: str = None) -> Lis
                         logger.warning(f"{req_id} Failed to parse item row: {text[:100]} - {e}")
         
         logger.info(f"{req_id} Extracted {len(items)} items from invoice")
-        return items
+        return items, guest_name
         
     except Exception as e:
         logger.error(f"{req_id} Error parsing invoice: {e}")
-        return []
+        return [], ""
 
 
 
@@ -221,6 +232,7 @@ def inject_order(
             logger.warning(f"[req-{correlation_id}] Failed to fetch booking details: {e}")
     
     # If still no items, try parsing invoice document
+    invoice_guest_name = ""
     if not tripleseat_items and documents:
         logger.info(f"[req-{correlation_id}] No items found, attempting to parse invoice document")
         # Find invoice document and its view URL
@@ -230,9 +242,11 @@ def inject_order(
             if invoice_view:
                 invoice_url = invoice_view.get('url')
                 if invoice_url:
-                    tripleseat_items = parse_invoice_for_items(invoice_url, correlation_id)
+                    tripleseat_items, invoice_guest_name = parse_invoice_for_items(invoice_url, correlation_id)
                     if tripleseat_items:
                         logger.info(f"[req-{correlation_id}] Successfully extracted {len(tripleseat_items)} items from invoice")
+                        if invoice_guest_name:
+                            logger.info(f"[req-{correlation_id}] Extracted guest name from invoice: '{invoice_guest_name}'")
                         break
     
     logger.info(f"[req-{correlation_id}] Found {len(tripleseat_items)} line items in TripleSeat event")
@@ -280,11 +294,13 @@ def inject_order(
     discount_amount = subtotal - invoice_total if invoice_total < subtotal else 0
     
     # Get customer name and phone from event
-    # Try multiple fields: guest_name, client_name, name, or default to event title
-    customer_name = event.get("guest_name") or event.get("client_name") or event.get("host_name") or ""
+    # Try multiple fields: guest_name, client_name, name, or fall back to invoice guest name
+    customer_name = event.get("guest_name") or event.get("client_name") or event.get("host_name") or invoice_guest_name or ""
     customer_phone = event.get("phone", "") or event.get("guest_phone", "")
     
     logger.info(f"[req-{correlation_id}] Event fields: name='{event.get('name')}', guest_name='{event.get('guest_name')}', client_name='{event.get('client_name')}', host_name='{event.get('host_name')}'")
+    if invoice_guest_name and not (event.get("guest_name") or event.get("client_name") or event.get("host_name")):
+        logger.info(f"[req-{correlation_id}] Using guest name from invoice: '{invoice_guest_name}'")
     logger.info(f"[req-{correlation_id}] Extracted - Customer name: '{customer_name}', Phone: '{customer_phone}'")
 
     # Build order data with resolved items - use new format expected by create_order()
