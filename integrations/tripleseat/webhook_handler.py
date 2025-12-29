@@ -193,8 +193,9 @@ async def handle_tripleseat_webhook(
     
     # ===== STEP 2: IDEMPOTENCY CHECK =====
     # Use trigger_type + event_id + updated_at as idempotency key
+    # Skip idempotency check during testing (test_location_override enabled)
     primary_id = event_id or booking_id
-    if primary_id and updated_at:
+    if primary_id and updated_at and not test_location_override:
         idempotency_key = f"{trigger_type}:{primary_id}:{updated_at}"
         if idempotency_key in idempotency_cache:
             logger.info(f"[req-{correlation_id}] Duplicate webhook detected (idempotency): {idempotency_key}")
@@ -206,6 +207,9 @@ async def handle_tripleseat_webhook(
             }
     else:
         idempotency_key = None
+    
+    if test_location_override:
+        logger.info(f"[req-{correlation_id}] Idempotency check SKIPPED (test_location_override enabled)")
 
     # ===== STEP 3: EXTRACT EVENT FROM PAYLOAD (PAYLOAD-FIRST) =====
     event = payload.get("event", {})
