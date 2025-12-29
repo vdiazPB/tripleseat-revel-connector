@@ -316,7 +316,7 @@ class RevelAPIClient:
                 'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',  # Ensure discount reference is set
                 'closed': False,  # DO NOT close - Revel shows open orders in Order History
                 'printed': True,  # Mark as printed
-                'opened': True,  # Mark as opened (required for Order History UI display)
+                'opened': opened_at,  # Set opened timestamp (required for Order History UI display)
                 # Note: NOT including discount_amount here - Revel may calculate it from AppliedDiscountOrder
             }
             
