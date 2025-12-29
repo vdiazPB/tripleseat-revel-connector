@@ -337,8 +337,8 @@ class RevelAPIClient:
                 'subtotal': subtotal,  # Amount before discount
                 'final_total': final_total,  # Amount after discount
                 'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',  # Ensure discount reference is set
-                'opened': not is_fully_paid,  # Open if balance remains, closed if fully paid
-                'closed': is_fully_paid,  # Close if fully paid
+                'opened': True,  # Always opened=True to make visible in Revel UI
+                'closed': is_fully_paid,  # Close if fully paid, otherwise open
                 'printed': True,  # Mark as printed
                 # Note: NOT including discount_amount here - Revel may calculate it from AppliedDiscountOrder
             }
