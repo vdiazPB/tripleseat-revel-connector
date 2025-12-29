@@ -24,8 +24,10 @@ async def startup_event():
     """Initialize scheduled tasks on app startup."""
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
-        from integrations.tripleseat.sync import TripleSeatSync
+        from apscheduler.triggers.interval import IntervalTrigger
         import requests
+        
+        logger.info("APScheduler dependencies imported successfully")
         
         scheduler = BackgroundScheduler()
         
@@ -72,10 +74,10 @@ async def startup_event():
         # Store scheduler in app state for potential cleanup
         app.scheduler = scheduler
         
-    except ImportError:
-        logger.warning("APScheduler not installed - skipping scheduled sync task")
+    except ImportError as e:
+        logger.warning(f"APScheduler not installed or import error: {e}")
     except Exception as e:
-        logger.error(f"Failed to initialize scheduler: {e}")
+        logger.error(f"Failed to initialize scheduler: {e}", exc_info=True)
 
 async def shutdown_event():
     """Clean up scheduled tasks on app shutdown."""
