@@ -283,7 +283,7 @@ class RevelAPIClient:
             final_total = float(payment_amount) if payment_amount else 0
             subtotal = float(payment_amount) + float(discount_amount) if payment_amount else 0
             logger.info(f"Finalizing: discount_amount={discount_amount}, final_total={final_total}, subtotal={subtotal}")
-            finalize_success = self._finalize_order(order_uri, subtotal, discount_amount, final_total, headers)
+            finalize_success = self._finalize_order(order_uri, subtotal, discount_amount, final_total, headers, now_iso)
             if finalize_success:
                 logger.info(f"  ✅ Order finalized and closed (will appear in Revel UI)")
             
@@ -299,7 +299,7 @@ class RevelAPIClient:
                 logger.error(f"Response body: {e.response.text[:500]}")
             return None
 
-    def _finalize_order(self, order_uri: str, subtotal: float, discount_amount: float, final_total: float, headers: Dict[str, str]) -> bool:
+    def _finalize_order(self, order_uri: str, subtotal: float, discount_amount: float, final_total: float, headers: Dict[str, str], opened_at: str) -> bool:
         """Finalize an order by setting totals and closing it.
         
         This makes the order visible in the Revel UI Order History.
@@ -338,6 +338,10 @@ class RevelAPIClient:
                     else:
                         logger.warning(f"⚠️ Failed to set printed flag: {printed_response.status_code}")
                 
+                # Create OrderHistory record so order appears in Order History UI
+                logger.info("Creating OrderHistory record...")
+                self._create_order_history(order_uri, headers, opened_at)
+                
                 return True
             else:
                 logger.error(f"Failed to finalize order: HTTP {response.status_code}")
@@ -345,6 +349,33 @@ class RevelAPIClient:
                 return False
         except Exception as e:
             logger.error(f"Failed to finalize order: {e}")
+            return False
+
+    def _create_order_history(self, order_uri: str, headers: Dict[str, str], opened_at: str) -> bool:
+        """Create an OrderHistory record for the order to make it appear in Order History UI."""
+        try:
+            history_url = f"{self.base_url}/resources/OrderHistory/"
+            history_data = {
+                'uuid': str(uuid.uuid4()),
+                'order': order_uri,
+                'order_opened_by': f'/enterprise/User/{self.default_user_id}/',
+                'order_opened_at': f'/resources/PosStation/{self.default_pos_station_id}/',
+                'opened': opened_at,  # Timestamp when order was opened
+            }
+            
+            logger.debug(f"Creating OrderHistory: {history_data}")
+            resp = requests.post(history_url, headers=headers, json=history_data)
+            
+            if resp.status_code in [200, 201]:
+                history = resp.json()
+                logger.info(f"✅ OrderHistory record created: ID={history.get('id')}")
+                return True
+            else:
+                logger.warning(f"⚠️ Failed to create OrderHistory: HTTP {resp.status_code}")
+                logger.warning(f"Response: {resp.text[:200]}")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to create OrderHistory: {e}")
             return False
 
     def open_order(self, order_id: str) -> bool:
