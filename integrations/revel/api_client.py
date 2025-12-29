@@ -331,28 +331,24 @@ class RevelAPIClient:
             
             logger.info(f"_finalize_order called with: subtotal={subtotal}, discount_amount={discount_amount}, final_total={final_total}")
             
-            # Calculate remaining_due: if final_total is paid, remaining_due = 0
-            # In this case, the order should be closed
-            remaining_due = 0  # We're providing full payment, so nothing remaining
-            should_close = remaining_due <= 0
-            
             finalize_data = {
                 'subtotal': subtotal,  # Amount before discount
                 'final_total': final_total,  # Amount after discount
                 'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',  # Ensure discount reference is set
-                'closed': should_close,  # Close if fully paid (remaining_due <= 0)
+                'closed': True,  # Close the order (fully paid)
                 'printed': True,  # Mark as printed
                 'opened': opened_at,  # Set opened timestamp (required for Order History UI display)
                 # Note: NOT including discount_amount here - Revel may calculate it from AppliedDiscountOrder
             }
             
             logger.info(f"Finalizing order - sending: {finalize_data}")
-            logger.info(f"{'Closing order (fully paid)' if should_close else 'Keeping order open (invoice)'}")
+            logger.info(f"Closing order")
             response = requests.patch(url, headers=headers, json=finalize_data)
             
             if response.status_code in [200, 202]:
                 resp_data = response.json()
                 logger.info(f"✅ Order finalized successfully")
+                logger.info(f"Response closed: {resp_data.get('closed')}")
                 logger.info(f"Response discount_amount: {resp_data.get('discount_amount')}")
                 logger.info(f"Response printed: {resp_data.get('printed')}")
                 
