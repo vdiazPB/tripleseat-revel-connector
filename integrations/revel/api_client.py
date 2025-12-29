@@ -335,20 +335,19 @@ class RevelAPIClient:
                 'subtotal': subtotal,  # Amount before discount
                 'final_total': final_total,  # Amount after discount
                 'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',  # Ensure discount reference is set
-                'closed': True,  # Close the order (fully paid)
+                'opened': True,  # IMPORTANT: Set to True (boolean) to activate order in Revel UI - NOT a timestamp!
                 'printed': True,  # Mark as printed
-                'opened': opened_at,  # Set opened timestamp (required for Order History UI display)
                 # Note: NOT including discount_amount here - Revel may calculate it from AppliedDiscountOrder
             }
             
             logger.info(f"Finalizing order - sending: {finalize_data}")
-            logger.info(f"Closing order")
+            logger.info(f"Opening/activating order in Revel UI")
             response = requests.patch(url, headers=headers, json=finalize_data)
             
             if response.status_code in [200, 202]:
                 resp_data = response.json()
                 logger.info(f"✅ Order finalized successfully")
-                logger.info(f"Response closed: {resp_data.get('closed')}")
+                logger.info(f"Response opened: {resp_data.get('opened')}")
                 logger.info(f"Response discount_amount: {resp_data.get('discount_amount')}")
                 logger.info(f"Response printed: {resp_data.get('printed')}")
                 

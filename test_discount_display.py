@@ -43,7 +43,7 @@ created_order = client.create_order(order_data)
 
 if created_order:
     order_id = created_order.get('id')
-    print(f"\n✅ Order {order_id} created\n")
+    print(f"\n[OK] Order {order_id} created\n")
     
     # Immediately verify via API
     print("Verifying via Revel API...")
@@ -75,6 +75,6 @@ if created_order:
     print("Look at Order History and check if discount shows")
     print("=" * 70)
 else:
-    print("❌ Failed to create order")
+    print("[FAILED] Failed to create order")
 
 print()
