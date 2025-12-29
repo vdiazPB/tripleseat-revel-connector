@@ -303,8 +303,10 @@ class RevelAPIClient:
             # So: final_total = payment_amount, subtotal = final_total + discount_amount
             final_total = float(payment_amount) if payment_amount else 0
             subtotal = float(payment_amount) + float(discount_amount) if payment_amount else 0
-            logger.info(f"Finalizing: discount_amount={discount_amount}, final_total={final_total}, subtotal={subtotal}")
-            finalize_success = self._finalize_order(order_uri, subtotal, discount_amount, final_total, headers, now)
+            # Check if order is fully paid
+            is_fully_paid = payment_amount >= (subtotal - discount_amount)  # payment covers final total
+            logger.info(f"Finalizing: discount_amount={discount_amount}, final_total={final_total}, subtotal={subtotal}, fully_paid={is_fully_paid}")
+            finalize_success = self._finalize_order(order_uri, subtotal, discount_amount, final_total, is_fully_paid, headers, now)
             if finalize_success:
                 logger.info(f"  ✅ Order finalized (will appear in Revel UI)")
             
@@ -320,34 +322,37 @@ class RevelAPIClient:
                 logger.error(f"Response body: {e.response.text[:500]}")
             return None
 
-    def _finalize_order(self, order_uri: str, subtotal: float, discount_amount: float, final_total: float, headers: Dict[str, str], opened_at: str) -> bool:
-        """Finalize an order by setting totals and closing it.
+    def _finalize_order(self, order_uri: str, subtotal: float, discount_amount: float, final_total: float, is_fully_paid: bool, headers: Dict[str, str], opened_at: str) -> bool:
+        """Finalize an order by setting totals and opening or closing it.
         
         This makes the order visible in the Revel UI Order History.
-        Automatically closes the order if remaining_due <= 0 (fully paid or overpaid).
+        Closes the order if fully paid (remaining_due <= 0), otherwise leaves it open.
         """
         try:
             url = f"{self.base_url}{order_uri}"
             
-            logger.info(f"_finalize_order called with: subtotal={subtotal}, discount_amount={discount_amount}, final_total={final_total}")
+            logger.info(f"_finalize_order called with: subtotal={subtotal}, discount_amount={discount_amount}, final_total={final_total}, fully_paid={is_fully_paid}")
             
             finalize_data = {
                 'subtotal': subtotal,  # Amount before discount
                 'final_total': final_total,  # Amount after discount
                 'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',  # Ensure discount reference is set
-                'opened': True,  # IMPORTANT: Set to True (boolean) to activate order in Revel UI - NOT a timestamp!
+                'opened': not is_fully_paid,  # Open if balance remains, closed if fully paid
+                'closed': is_fully_paid,  # Close if fully paid
                 'printed': True,  # Mark as printed
                 # Note: NOT including discount_amount here - Revel may calculate it from AppliedDiscountOrder
             }
             
+            status_msg = "closed" if is_fully_paid else "open"
             logger.info(f"Finalizing order - sending: {finalize_data}")
-            logger.info(f"Opening/activating order in Revel UI")
+            logger.info(f"Order status: {status_msg} (fully_paid={is_fully_paid})")
             response = requests.patch(url, headers=headers, json=finalize_data)
             
             if response.status_code in [200, 202]:
                 resp_data = response.json()
                 logger.info(f"✅ Order finalized successfully")
                 logger.info(f"Response opened: {resp_data.get('opened')}")
+                logger.info(f"Response closed: {resp_data.get('closed')}")
                 logger.info(f"Response discount_amount: {resp_data.get('discount_amount')}")
                 logger.info(f"Response printed: {resp_data.get('printed')}")
                 
