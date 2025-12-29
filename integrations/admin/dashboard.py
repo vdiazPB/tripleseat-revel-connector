@@ -1,6 +1,6 @@
 """Settings and dashboard UI with persistent JSON storage."""
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Body
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 import os
 import json
@@ -96,9 +96,12 @@ def get_config():
 
 
 @router.post("/api/config")
-async def update_config(request_data: Dict[str, Any]):
+async def update_config(request: Request):
     """Update configuration and save to JSON."""
     try:
+        # Parse JSON body
+        request_data = await request.json()
+        
         # Merge with existing settings
         current = load_settings()
         
@@ -112,7 +115,7 @@ async def update_config(request_data: Dict[str, Any]):
         logger.info("Settings updated and saved to JSON")
         return {"success": True, "message": "Settings saved to settings.json"}
     except Exception as e:
-        logger.error(f"Error updating config: {e}")
+        logger.error(f"Error updating config: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
