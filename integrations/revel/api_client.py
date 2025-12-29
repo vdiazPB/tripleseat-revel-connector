@@ -314,6 +314,7 @@ class RevelAPIClient:
                 'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',  # Ensure discount reference is set
                 'closed': True,  # Close the order so it appears in history
                 'printed': True,  # Mark as printed
+                'opened': True,  # Mark as opened (required for Order History UI display)
                 # Note: NOT including discount_amount here - Revel may calculate it from AppliedDiscountOrder
             }
             
@@ -324,6 +325,18 @@ class RevelAPIClient:
                 resp_data = response.json()
                 logger.info(f"✅ Order finalized successfully")
                 logger.info(f"Response discount_amount: {resp_data.get('discount_amount')}")
+                logger.info(f"Response printed: {resp_data.get('printed')}")
+                
+                # Ensure printed flag is actually set (sometimes Revel doesn't apply it in first PATCH)
+                if not resp_data.get('printed'):
+                    logger.info("⚠️ Printed flag not set in response, applying second PATCH...")
+                    printed_data = {'printed': True}
+                    printed_response = requests.patch(url, headers=headers, json=printed_data)
+                    if printed_response.status_code in [200, 202]:
+                        logger.info("✅ Printed flag successfully set")
+                    else:
+                        logger.warning(f"⚠️ Failed to set printed flag: {printed_response.status_code}")
+                
                 return True
             else:
                 logger.error(f"Failed to finalize order: HTTP {response.status_code}")
@@ -362,17 +375,23 @@ class RevelAPIClient:
             return False
 
     def _apply_discount(self, order_uri: str, amount: float, now: str, headers: Dict[str, str]) -> bool:
-        """Apply Triple Seat Discount to an order by updating order fields."""
+        """Apply Triple Seat Discount to an order.
+        
+        For variable discounts, we need to set the amount properly on the order
+        so that the AppliedDiscountOrder gets created with the correct value.
+        """
         try:
-            # Set the discount and discount_amount on the order
-            # This will trigger Revel to create an AppliedDiscountOrder record
+            # For variable discounts, set both discount and the amount
+            # The discount_amount field controls what gets applied
             discount_data = {
                 'discount': f'/resources/Discount/{self.tripleseat_discount_id}/',
-                'discount_amount': amount,
+                'discount_amount': amount,  # This is the actual discount amount to apply
+                'discount_rule_amount': amount,  # Also try setting rule_amount
             }
             url = f"{self.base_url}{order_uri}"
+            logger.debug(f"Applying discount: {discount_data}")
             response = requests.patch(url, headers=headers, json=discount_data)
-            logger.debug(f"Applied discount PATCH - status {response.status_code}, response: {response.text[:200] if response.status_code not in [200, 202] else 'OK'}")
+            logger.debug(f"Discount PATCH response: {response.status_code}")
             return response.status_code in [200, 202]
         except Exception as e:
             logger.error(f"Failed to apply discount: {e}")
