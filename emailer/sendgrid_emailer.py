@@ -10,9 +10,21 @@ logger = logging.getLogger(__name__)
 def send_success_email(event_id: str, order_details, correlation_id: str = None):
     """Send success notification email."""
     try:
+        # Guard against None order_details
+        if not order_details:
+            logger.warning(f"[req-{correlation_id}] Skipping email: order_details is None for event {event_id}")
+            return
+            
         sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
         sender = os.getenv('TRIPLESEAT_EMAIL_SENDER')
-        recipients = os.getenv('TRIPLESEAT_EMAIL_RECIPIENTS').split(',')
+        recipients_str = os.getenv('TRIPLESEAT_EMAIL_RECIPIENTS')
+        
+        # Guard against missing email config
+        if not sender or not recipients_str:
+            logger.warning(f"[req-{correlation_id}] Skipping email: EMAIL_SENDER or EMAIL_RECIPIENTS not configured")
+            return
+            
+        recipients = [r.strip() for r in recipients_str.split(',')]
 
         # Get event details
         ts_client = TripleSeatAPIClient()
@@ -54,7 +66,14 @@ def send_failure_email(event_id: str, error_reason: str, correlation_id: str = N
     try:
         sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
         sender = os.getenv('TRIPLESEAT_EMAIL_SENDER')
-        recipients = os.getenv('TRIPLESEAT_EMAIL_RECIPIENTS').split(',')
+        recipients_str = os.getenv('TRIPLESEAT_EMAIL_RECIPIENTS')
+        
+        # Guard against missing email config
+        if not sender or not recipients_str:
+            logger.warning(f"[req-{correlation_id}] Skipping email: EMAIL_SENDER or EMAIL_RECIPIENTS not configured")
+            return
+            
+        recipients = [r.strip() for r in recipients_str.split(',')]
 
         subject = f"FAILED: Triple Seat Event Injection — Event #{event_id}"
 
