@@ -119,16 +119,25 @@ async def update_config(request_data: Dict[str, Any]):
 @router.get("/api/status")
 def get_status():
     """Get connector status and statistics."""
-    config = load_settings()
+    try:
+        config = load_settings()
+        enabled = config.get("sync_settings", {}).get("enabled", True)
+        dry_run = config.get("sync_settings", {}).get("dry_run", False)
+        timezone = config.get("sync_settings", {}).get("timezone", "America/Los_Angeles")
+    except Exception as e:
+        logger.error(f"Error loading settings in status: {e}")
+        enabled = True
+        dry_run = False
+        timezone = "America/Los_Angeles"
+    
     return {
         "status": "online",
         "timestamp": datetime.now().isoformat(),
         "connector": {
-            "enabled": config["sync_settings"]["enabled"],
-            "mode": "dry_run" if config["sync_settings"]["dry_run"] else "production",
-            "timezone": config["sync_settings"]["timezone"],
+            "enabled": enabled,
+            "mode": "dry_run" if dry_run else "production",
+            "timezone": timezone,
         },
-        "settings_file": str(SETTINGS_FILE),
         "settings_file_exists": SETTINGS_FILE.exists(),
     }
 
@@ -226,7 +235,7 @@ def get_dashboard_html() -> str:
             </div>
             <div class="field">
                 <span class="field-label">Settings File:</span>
-                <span class="field-value" id="settingsFile">settings.json</span>
+                <span class="field-value" id="settingsFile">Checking...</span>
             </div>
             <button class="btn-primary" onclick="refreshStatus()">Refresh Status</button>
         </div>
