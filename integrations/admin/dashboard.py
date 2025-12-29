@@ -1,13 +1,4 @@
-"""Settings and dashboard UI for TripleSeat-Revel connector - FIXED VERSION.
-
-Provides web-based admin interface for:
-- API credential management
-- Establishment mapping
-- Sync configuration
-- Notification settings
-- Manual sync triggers
-- Real-time monitoring
-"""
+"""Settings and dashboard UI with persistent JSON storage."""
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse
@@ -16,14 +7,30 @@ import json
 from datetime import datetime
 import logging
 from typing import Dict, Any
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+# Settings file path
+SETTINGS_FILE = Path(__file__).parent.parent.parent / "settings.json"
 
-def get_current_config() -> Dict[str, Any]:
-    """Get current configuration from environment variables."""
+
+def load_settings() -> Dict[str, Any]:
+    """Load settings from JSON file, fallback to environment variables."""
+    if SETTINGS_FILE.exists():
+        try:
+            with open(SETTINGS_FILE, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load settings.json: {e}, using defaults")
+    
+    return get_default_settings()
+
+
+def get_default_settings() -> Dict[str, Any]:
+    """Get settings from environment variables."""
     return {
         "api_credentials": {
             "tripleseat": {
@@ -33,7 +40,6 @@ def get_current_config() -> Dict[str, Any]:
             "revel": {
                 "establishment_id": os.getenv("REVEL_ESTABLISHMENT_ID", "4"),
                 "location_id": os.getenv("REVEL_LOCATION_ID", "1"),
-                "api_key_configured": bool(os.getenv("REVEL_API_KEY")),
                 "domain": os.getenv("REVEL_DOMAIN", "pinkboxdoughnuts.revelup.com"),
             },
         },
@@ -57,9 +63,24 @@ def get_current_config() -> Dict[str, Any]:
         "advanced_settings": {
             "test_mode_override": os.getenv("TEST_LOCATION_OVERRIDE", "false").lower() == "true",
             "test_establishment_id": os.getenv("TEST_ESTABLISHMENT_ID", "4"),
-            "allowed_locations": os.getenv("ALLOWED_LOCATIONS", "").split(","),
         },
     }
+
+
+def save_settings(settings: Dict[str, Any]) -> None:
+    """Save settings to JSON file."""
+    try:
+        with open(SETTINGS_FILE, 'w') as f:
+            json.dump(settings, f, indent=2)
+        logger.info("Settings saved to settings.json")
+    except Exception as e:
+        logger.error(f"Failed to save settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save settings: {e}")
+
+
+def get_current_config() -> Dict[str, Any]:
+    """Get current configuration from JSON or environment."""
+    return load_settings()
 
 
 @router.get("/")
@@ -74,17 +95,30 @@ def get_config():
     return get_current_config()
 
 
+@router.post("/api/config")
+def update_config(config: Dict[str, Any]):
+    """Update configuration and save to JSON."""
+    try:
+        save_settings(config)
+        return {"success": True, "message": "Settings saved to settings.json"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @router.get("/api/status")
 def get_status():
     """Get connector status and statistics."""
+    config = load_settings()
     return {
         "status": "online",
         "timestamp": datetime.now().isoformat(),
         "connector": {
-            "enabled": os.getenv("ENABLE_CONNECTOR", "true").lower() == "true",
-            "mode": "dry_run" if os.getenv("DRY_RUN", "false").lower() == "true" else "production",
-            "timezone": os.getenv("TIMEZONE", "America/Los_Angeles"),
+            "enabled": config["sync_settings"]["enabled"],
+            "mode": "dry_run" if config["sync_settings"]["dry_run"] else "production",
+            "timezone": config["sync_settings"]["timezone"],
         },
+        "settings_file": str(SETTINGS_FILE),
+        "settings_file_exists": SETTINGS_FILE.exists(),
     }
 
 
@@ -108,8 +142,8 @@ async def trigger_sync(event_id: str = None, hours_back: int = 48):
 
 
 def get_dashboard_html() -> str:
-    """Generate admin dashboard HTML with safe quote handling."""
-    config = get_current_config()
+    """Generate admin dashboard HTML with editable settings."""
+    config = load_settings()
     
     html = """<!DOCTYPE html>
 <html lang="en">
@@ -135,27 +169,33 @@ def get_dashboard_html() -> str:
                   padding-bottom: 12px; border-bottom: 2px solid #f0f0f0; }
         .field { margin-bottom: 12px; display: flex; justify-content: space-between;
                 align-items: center; font-size: 13px; }
-        .field-label { font-weight: 600; color: #555; }
+        .field-label { font-weight: 600; color: #555; min-width: 200px; }
         .field-value { color: #666; }
-        .button-group { display: flex; gap: 10px; margin-top: 16px; }
+        .button-group { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
         button { padding: 10px 20px; border: none; border-radius: 6px; font-size: 13px;
                 font-weight: 600; cursor: pointer; transition: all 0.2s; }
         .btn-primary { background: #667eea; color: white; }
         .btn-primary:hover { background: #5568d3; }
+        .btn-secondary { background: #e0e0e0; color: #333; }
+        .btn-secondary:hover { background: #d0d0d0; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-success:hover { background: #218838; }
         button:disabled { opacity: 0.6; cursor: not-allowed; }
         label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; }
-        input { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px;
+        input, select { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px;
                margin-bottom: 12px; font-size: 13px; }
         .result { background: #f5f5f5; padding: 12px; border-radius: 6px; margin-top: 12px;
                  font-family: monospace; font-size: 11px; max-height: 300px; overflow-y: auto; }
         footer { text-align: center; color: white; margin-top: 40px; font-size: 12px; }
+        .success-msg { background: #d4edda; color: #155724; padding: 12px; border-radius: 6px; margin-top: 12px; }
+        .error-msg { background: #f8d7da; color: #721c24; padding: 12px; border-radius: 6px; margin-top: 12px; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>⚙️ TripleSeat-Revel Connector Admin</h1>
-            <p>3-Tier Reconciliation Architecture</p>
+            <p>3-Tier Reconciliation Architecture - Settings Persist to JSON</p>
             <div class="status-badge">● Online</div>
         </header>
 
@@ -173,18 +213,75 @@ def get_dashboard_html() -> str:
                 <span class="field-label">Timezone:</span>
                 <span class="field-value" id="connTimezone">Loading...</span>
             </div>
+            <div class="field">
+                <span class="field-label">Settings File:</span>
+                <span class="field-value" id="settingsFile">settings.json</span>
+            </div>
             <button class="btn-primary" onclick="refreshStatus()">Refresh Status</button>
         </div>
 
         <div class="card">
-            <h2>API Credentials</h2>
+            <h2>Establishment Mapping (Editable - Saved to JSON)</h2>
+            <label>Dining Option ID:</label>
+            <input type="text" id="diningOptionId" value=\"""" + config['establishment_mapping']['dining_option_id'] + """\">
+            
+            <label>Payment Type ID:</label>
+            <input type="text" id="paymentTypeId" value=\"""" + config['establishment_mapping']['payment_type_id'] + """\">
+            
+            <label>Discount ID:</label>
+            <input type="text" id="discountId" value=\"""" + config['establishment_mapping']['discount_id'] + """\">
+            
+            <label>Custom Menu ID:</label>
+            <input type="text" id="customMenuId" value=\"""" + config['establishment_mapping']['custom_menu_id'] + """\">
+            
+            <button class="btn-success" onclick="saveEstablishmentMapping()">💾 Save Mapping Settings</button>
+            <div id="mappingMsg"></div>
+        </div>
+
+        <div class="card">
+            <h2>Sync Settings (Editable - Saved to JSON)</h2>
+            <label>
+                <input type="checkbox" id="syncEnabled" """ + ("checked" if config['sync_settings']['enabled'] else "") + """>
+                Enable Connector
+            </label>
+            
+            <label>
+                <input type="checkbox" id="dryRunMode" """ + ("checked" if config['sync_settings']['dry_run'] else "") + """>
+                Dry Run Mode (test without creating orders)
+            </label>
+            
+            <label>Timezone:</label>
+            <input type="text" id="timezone" value=\"""" + config['sync_settings']['timezone'] + """\">
+            
+            <label>Lookback Hours:</label>
+            <input type="number" id="lookbackHours" min="1" max="720" value=\"""" + str(config['sync_settings']['lookback_hours']) + """\">
+            
+            <button class="btn-success" onclick="saveSyncSettings()">💾 Save Sync Settings</button>
+            <div id="syncMsg"></div>
+        </div>
+
+        <div class="card">
+            <h2>Manual Sync Trigger</h2>
+            <label>Event ID (leave blank for bulk sync):</label>
+            <input type="text" id="eventId" placeholder="e.g., 55521609">
+            
+            <label>Lookback Hours (for bulk sync):</label>
+            <input type="number" id="manualLookback" min="1" max="720" value="48">
+            
+            <button class="btn-primary" onclick="triggerSync()">▶️ Trigger Sync</button>
+            <button class="btn-primary" onclick="triggerBulkSync()">⚡ Trigger Bulk Sync (48h)</button>
+            
+            <div id="resultDiv" style="display: none;">
+                <h3 style="margin-top: 16px;">Sync Result:</h3>
+                <div class="result" id="syncResult"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>API Credentials (Read-Only)</h2>
             <div class="field">
                 <span class="field-label">TripleSeat Site ID:</span>
                 <span class="field-value">""" + config['api_credentials']['tripleseat']['site_id'] + """</span>
-            </div>
-            <div class="field">
-                <span class="field-label">TripleSeat OAuth:</span>
-                <span class="field-value">""" + ("✓ Configured" if config['api_credentials']['tripleseat']['oauth_configured'] else "✗ Not Configured") + """</span>
             </div>
             <div class="field">
                 <span class="field-label">Revel Establishment:</span>
@@ -194,74 +291,17 @@ def get_dashboard_html() -> str:
                 <span class="field-label">Revel Domain:</span>
                 <span class="field-value">""" + config['api_credentials']['revel']['domain'] + """</span>
             </div>
-        </div>
-
-        <div class="card">
-            <h2>Establishment Mapping</h2>
-            <div class="field">
-                <span class="field-label">Dining Option ID:</span>
-                <span class="field-value">""" + config['establishment_mapping']['dining_option_id'] + """</span>
-            </div>
-            <div class="field">
-                <span class="field-label">Payment Type ID:</span>
-                <span class="field-value">""" + config['establishment_mapping']['payment_type_id'] + """</span>
-            </div>
-            <div class="field">
-                <span class="field-label">Discount ID:</span>
-                <span class="field-value">""" + config['establishment_mapping']['discount_id'] + """</span>
-            </div>
-            <div class="field">
-                <span class="field-label">Custom Menu ID:</span>
-                <span class="field-value">""" + config['establishment_mapping']['custom_menu_id'] + """</span>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Sync Settings</h2>
-            <div class="field">
-                <span class="field-label">Sync Interval:</span>
-                <span class="field-value">""" + str(config['sync_settings']['sync_interval_minutes']) + """ minutes</span>
-            </div>
-            <div class="field">
-                <span class="field-label">Lookback Window:</span>
-                <span class="field-value">""" + str(config['sync_settings']['lookback_hours']) + """ hours</span>
-            </div>
-            <div class="field">
-                <span class="field-label">Connector Enabled:</span>
-                <span class="field-value">""" + ("✓ Yes" if config['sync_settings']['enabled'] else "✗ No") + """</span>
-            </div>
-            <div class="field">
-                <span class="field-label">Dry Run Mode:</span>
-                <span class="field-value">""" + ("⚠️ ON" if config['sync_settings']['dry_run'] else "✓ OFF") + """</span>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Manual Sync Trigger</h2>
-            <label>Event ID (leave blank for bulk sync):</label>
-            <input type="text" id="eventId" placeholder="e.g., 55521609">
-            
-            <label>Lookback Hours (for bulk sync):</label>
-            <input type="number" id="lookback" min="1" max="720" value="48">
-            
-            <div class="button-group">
-                <button class="btn-primary" onclick="triggerSync()">Trigger Sync</button>
-                <button class="btn-primary" onclick="triggerBulkSync()">Trigger Bulk Sync</button>
-            </div>
-            
-            <div id="resultDiv" style="display: none;">
-                <h3 style="margin-top: 16px;">Sync Result:</h3>
-                <div class="result" id="syncResult"></div>
-            </div>
+            <p style="font-size: 12px; color: #999; margin-top: 12px;">
+                💡 API credentials are set via environment variables for security.
+            </p>
         </div>
 
         <footer>
-            <p>TripleSeat-Revel Connector v1.0 | 3-Tier Reconciliation Architecture</p>
+            <p>TripleSeat-Revel Connector v1.0 | Settings saved to settings.json</p>
         </footer>
     </div>
 
     <script>
-        // Initialize on page load
         window.addEventListener("load", function() {
             refreshStatus();
         });
@@ -275,13 +315,83 @@ def get_dashboard_html() -> str:
                     document.getElementById("connStatus").textContent = status;
                     document.getElementById("connMode").textContent = mode;
                     document.getElementById("connTimezone").textContent = data.connector.timezone;
+                    document.getElementById("settingsFile").textContent = data.settings_file_exists ? "✓ settings.json (persisted)" : "📄 settings.json (not found, using defaults)";
                 })
                 .catch(e => console.error("Error:", e));
         }
         
+        function saveEstablishmentMapping() {
+            var btn = event.target;
+            btn.disabled = true;
+            btn.textContent = "💾 Saving...";
+            
+            var config = {
+                establishment_mapping: {
+                    dining_option_id: document.getElementById("diningOptionId").value,
+                    payment_type_id: document.getElementById("paymentTypeId").value,
+                    discount_id: document.getElementById("discountId").value,
+                    custom_menu_id: document.getElementById("customMenuId").value
+                }
+            };
+            
+            fetch("/admin/api/config", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(config)
+            })
+            .then(r => r.json())
+            .then(data => {
+                var msg = document.getElementById("mappingMsg");
+                if (data.success) {
+                    msg.innerHTML = "<div class=\"success-msg\">✓ Establishment mapping saved to settings.json</div>";
+                } else {
+                    msg.innerHTML = "<div class=\"error-msg\">✗ Error: " + data.error + "</div>";
+                }
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = "💾 Save Mapping Settings";
+            });
+        }
+        
+        function saveSyncSettings() {
+            var btn = event.target;
+            btn.disabled = true;
+            btn.textContent = "💾 Saving...";
+            
+            var config = {
+                sync_settings: {
+                    sync_interval_minutes: 45,
+                    lookback_hours: parseInt(document.getElementById("lookbackHours").value),
+                    timezone: document.getElementById("timezone").value,
+                    enabled: document.getElementById("syncEnabled").checked,
+                    dry_run: document.getElementById("dryRunMode").checked
+                }
+            };
+            
+            fetch("/admin/api/config", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(config)
+            })
+            .then(r => r.json())
+            .then(data => {
+                var msg = document.getElementById("syncMsg");
+                if (data.success) {
+                    msg.innerHTML = "<div class=\"success-msg\">✓ Sync settings saved to settings.json</div>";
+                } else {
+                    msg.innerHTML = "<div class=\"error-msg\">✗ Error: " + data.error + "</div>";
+                }
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = "💾 Save Sync Settings";
+            });
+        }
+        
         function triggerSync() {
             var eventId = document.getElementById("eventId").value;
-            var lookback = document.getElementById("lookback").value;
+            var lookback = document.getElementById("manualLookback").value;
             var url = "/admin/api/sync/trigger?";
             
             if (eventId) {
@@ -292,7 +402,7 @@ def get_dashboard_html() -> str:
             
             var btn = event.target;
             btn.disabled = true;
-            btn.textContent = "Syncing...";
+            btn.textContent = "⏳ Syncing...";
             
             fetch(url, { method: "POST" })
                 .then(r => r.json())
@@ -304,13 +414,13 @@ def get_dashboard_html() -> str:
                 .catch(e => alert("Error: " + e))
                 .finally(() => {
                     btn.disabled = false;
-                    btn.textContent = "Trigger Sync";
+                    btn.textContent = "▶️ Trigger Sync";
                 });
         }
         
         function triggerBulkSync() {
             document.getElementById("eventId").value = "";
-            document.getElementById("lookback").value = "48";
+            document.getElementById("manualLookback").value = "48";
             triggerSync();
         }
     </script>
