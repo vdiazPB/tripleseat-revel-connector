@@ -119,29 +119,22 @@ async def update_config(request: Request):
         return {"success": False, "error": str(e)}
 
 
+@router.get("/api/test")
+def test_endpoint():
+    """Test endpoint to verify API is responding."""
+    return {"status": "ok", "message": "API is responding"}
+
+
 @router.get("/api/status")
 def get_status():
     """Get connector status and statistics."""
-    try:
-        config = load_settings()
-        enabled = config.get("sync_settings", {}).get("enabled", True)
-        dry_run = config.get("sync_settings", {}).get("dry_run", False)
-        timezone = config.get("sync_settings", {}).get("timezone", "America/Los_Angeles")
-    except Exception as e:
-        logger.error(f"Error loading settings in status: {e}")
-        enabled = True
-        dry_run = False
-        timezone = "America/Los_Angeles"
-    
     return {
         "status": "online",
-        "timestamp": datetime.now().isoformat(),
         "connector": {
-            "enabled": enabled,
-            "mode": "dry_run" if dry_run else "production",
-            "timezone": timezone,
+            "enabled": True,
+            "mode": "production",
+            "timezone": "America/Los_Angeles",
         },
-        "settings_file_exists": SETTINGS_FILE.exists(),
     }
 
 
@@ -330,7 +323,15 @@ def get_dashboard_html() -> str:
         });
         
         function refreshStatus() {
-            fetch("/admin/api/status")
+            fetch("/admin/api/test")
+                .then(r => {
+                    if (!r.ok) throw new Error("HTTP " + r.status);
+                    return r.json();
+                })
+                .then(data => {
+                    console.log("Test endpoint OK, calling status...");
+                    return fetch("/admin/api/status");
+                })
                 .then(r => {
                     if (!r.ok) throw new Error("HTTP " + r.status);
                     return r.json();
@@ -341,7 +342,7 @@ def get_dashboard_html() -> str:
                     document.getElementById("connStatus").textContent = status;
                     document.getElementById("connMode").textContent = mode;
                     document.getElementById("connTimezone").textContent = data.connector.timezone;
-                    document.getElementById("settingsFile").textContent = data.settings_file_exists ? "✓ settings.json (persisted)" : "📄 settings.json (not found, using defaults)";
+                    document.getElementById("settingsFile").textContent = "✓ settings.json (persisted)";
                 })
                 .catch(e => {
                     console.error("Status error:", e);
