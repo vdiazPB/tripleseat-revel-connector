@@ -36,11 +36,22 @@ def parse_invoice_for_items(invoice_url: str, correlation_id: str = None) -> tup
             return [], ""
         
         # Extract guest name from invoice HTML
-        # Look for patterns like "CONTACT: Destiny Whitley" or "Attendee: John Smith"
-        guest_match = re.search(r'(?:CONTACT|Attendee|Guest|Name)[\s:]*([A-Za-z\s\.\']+?)(?:<|[\n\r]|<)', response.text, re.IGNORECASE)
+        # First, clean up HTML to make it easier to parse
+        html_text = response.text
+        # Remove HTML tags but keep text and whitespace
+        clean_text = re.sub(r'<[^>]+>', ' ', html_text)
+        clean_text = re.sub(r'\s+', ' ', clean_text)  # Normalize whitespace
+        
+        # Look for "CONTACT: Destiny Whitley" pattern in cleaned text
+        guest_match = re.search(
+            r'CONTACT[\s:]+([A-Za-z\s\.\'\-]+?)(?:\s+ADDRESS|\s+EMAIL|\s+PHONE|$)',
+            clean_text,
+            re.IGNORECASE
+        )
         if guest_match:
             guest_name = guest_match.group(1).strip()
-            logger.info(f"{req_id} Extracted guest name from invoice: '{guest_name}'")
+            if guest_name and len(guest_name) > 1:  # Ensure we got a real name
+                logger.info(f"{req_id} Extracted guest name from invoice: '{guest_name}'")
         
         # Extract table rows
         tr_matches = re.findall(r'<tr[^>]*>(.*?)</tr>', response.text, re.DOTALL | re.IGNORECASE)

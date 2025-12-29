@@ -181,13 +181,13 @@ class RevelAPIClient:
         pst = pytz.timezone('America/Los_Angeles')
         now_pst = datetime.now(pst)
         
-        # Send dates as PST strings - Revel will store and display them correctly
-        # Do NOT convert to UTC - Revel expects local store time (PST)
-        now = now_pst.strftime('%Y-%m-%dT%H:%M:%SZ')  # PST as ISO format
-        now_iso = now_pst.isoformat()  # PST ISO format
+        # Send dates as PST strings WITHOUT Z suffix
+        # Revel expects local store time (PST) and will interpret it as such
+        now = now_pst.strftime('%Y-%m-%dT%H:%M:%S')  # PST without Z (local time)
+        now_iso = now_pst.isoformat()  # PST ISO format with timezone offset
         
         logger.info(f"PST Time: {now_pst.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-        logger.info(f"Sending to Revel as PST: {now} (ISO: {now_iso})")
+        logger.info(f"Sending to Revel as PST (local): {now} (ISO: {now_iso})")
         logger.info(f"Customer info - Name: '{customer_name}', Phone: '{customer_phone}'")
         
         order_uuid = str(uuid.uuid4())
