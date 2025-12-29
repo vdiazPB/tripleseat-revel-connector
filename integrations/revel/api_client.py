@@ -86,7 +86,7 @@ class RevelAPIClient:
         
         Tries:
         1. Exact match (case-insensitive)
-        2. Fuzzy match (substring + similarity threshold)
+        2. Fuzzy match (similarity threshold only, no substring matching)
         
         Returns matched product or None.
         """
@@ -100,20 +100,15 @@ class RevelAPIClient:
                 logger.info(f"[PRODUCT MATCH - EXACT] '{product_name}' → product_id={product.get('id')}, price={price}")
                 return product
         
-        # Second pass: fuzzy match (substring + similarity)
+        # Second pass: fuzzy match (similarity only, higher threshold)
         best_match = None
         best_score = 0.0
-        threshold = 0.6  # 60% similarity threshold
+        threshold = 0.75  # 75% similarity threshold (more strict than before)
         
         for product in products:
             revel_name = product.get('name', '').lower()
             
-            # Check if search term is a substring of product name
-            if product_name_lower in revel_name or revel_name in product_name_lower:
-                logger.info(f"[PRODUCT MATCH - SUBSTRING] '{product_name}' → '{revel_name}' (product_id={product.get('id')})")
-                return product
-            
-            # Calculate similarity score
+            # Calculate similarity score (don't use substring matching, too loose)
             similarity = SequenceMatcher(None, product_name_lower, revel_name).ratio()
             if similarity > best_score and similarity >= threshold:
                 best_score = similarity
@@ -264,8 +259,6 @@ class RevelAPIClient:
                 item_uuid = str(uuid.uuid4())
                 ts_price = float(item.get('price', 0))  # Triple Seat price per unit
                 qty = item.get('quantity', 1)
-                
-                logger.info(f"Adding item: product_id={item.get('product_id')}, qty={qty}, price=${ts_price}")
                 
                 item_data = {
                     'uuid': item_uuid,

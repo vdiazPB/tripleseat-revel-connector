@@ -289,8 +289,13 @@ def inject_order(
     subtotal = sum(float(item.get('price', 0)) * int(item.get('quantity', 1)) for item in resolved_items)
     
     # Get invoice totals from billing invoice if available, otherwise use calculated subtotal
-    invoice_total = billing_invoice.get("total", 0) if billing_invoice else 0
+    # Invoice fields:
+    #  - subtotal: pre-discount food total
+    #  - grand_total: after all discounts (what customer actually owes)
+    #  - total: same as grand_total usually
     invoice_subtotal = billing_invoice.get("subtotal", 0) if billing_invoice else 0
+    invoice_grand_total = billing_invoice.get("grand_total", 0) if billing_invoice else 0
+    invoice_total = invoice_grand_total if invoice_grand_total > 0 else billing_invoice.get("total", 0) if billing_invoice else 0
     
     # Log all billing invoice fields for debugging
     if billing_invoice:
