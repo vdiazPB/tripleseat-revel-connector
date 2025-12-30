@@ -34,14 +34,42 @@ def send_success_email(event_id: str, order_details, correlation_id: str = None)
 
         establishment = get_revel_establishment(site_id) or "Unknown"
 
+        # Format event date
+        event_date = event.get('event_date', 'Unknown')
+        if event_date and event_date != 'Unknown':
+            try:
+                from datetime import datetime
+                # Try to parse and format the date
+                event_date = datetime.strptime(str(event_date), '%Y-%m-%d').strftime('%B %d, %Y')
+            except:
+                pass
+
+        # Build items table
+        items_html = ""
+        if hasattr(order_details, 'items') and order_details.items:
+            items_html = "<h3>Items Injected:</h3><table style='width:100%; border-collapse: collapse;'>"
+            items_html += "<tr style='background-color: #f0f0f0;'><th style='border: 1px solid #ddd; padding: 8px; text-align: left;'>Item</th><th style='border: 1px solid #ddd; padding: 8px; text-align: right;'>Qty</th><th style='border: 1px solid #ddd; padding: 8px; text-align: right;'>Price</th></tr>"
+            for item in order_details.items:
+                item_name = item.get('name', 'Unknown Item') if isinstance(item, dict) else str(item)
+                item_qty = item.get('quantity', 1) if isinstance(item, dict) else 1
+                item_price = item.get('price', 0) if isinstance(item, dict) else 0
+                items_html += f"<tr><td style='border: 1px solid #ddd; padding: 8px;'>{item_name}</td><td style='border: 1px solid #ddd; padding: 8px; text-align: right;'>{item_qty}</td><td style='border: 1px solid #ddd; padding: 8px; text-align: right;'>${item_price:.2f}</td></tr>"
+            items_html += "</table>"
+        else:
+            items_html = "<p><em>No items details available</em></p>"
+
         subject = f"Triple Seat Event Injected — Event #{event_id}"
 
         html_content = f"""
         <h2>Triple Seat Event Successfully Injected</h2>
         <p><strong>Event ID:</strong> {event_id}</p>
-        <p><strong>Event Date:</strong> {event.get('event_date', 'Unknown')}</p>
+        <p><strong>Event Date:</strong> {event_date}</p>
         <p><strong>Revel Location:</strong> {establishment}</p>
         <p><strong>Revel Order ID:</strong> {order_details.revel_order_id}</p>
+        
+        {items_html}
+        
+        <h3>Order Summary:</h3>
         <p><strong>Subtotal:</strong> ${order_details.subtotal:.2f}</p>
         <p><strong>Discount:</strong> ${order_details.discount:.2f}</p>
         <p><strong>Final Total:</strong> ${order_details.final_total:.2f}</p>
