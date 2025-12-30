@@ -34,8 +34,8 @@ def validate_event(event_id: str, correlation_id: str = None, skip_validation: b
         
         # Check event status
         event_status = event.get('status', '').upper()
-        if event_status not in ['DEFINITE', 'CONFIRMED']:
-            logger.warning(f"{req_id} Event {event_id} has status '{event_status}' - not definite/confirmed")
+        if event_status not in ['CLOSED']:
+            logger.warning(f"{req_id} Event {event_id} has status '{event_status}' - not closed")
             return ValidationResult(False, f"INVALID_STATUS:{event_status}")
         
         logger.info(f"{req_id} Event {event_id} validation successful via OAuth 2.0 API")
