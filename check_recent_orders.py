@@ -22,14 +22,15 @@ headers = {
 
 # Get orders - try with a specific date
 today = datetime.now().date()
+event_date = datetime(2025, 12, 28).date()  # Event date
 
 print("=" * 80)
 print(f"FETCHING ORDERS FROM SPECIAL EVENTS LOCATION (Code 8)")
-print(f"Date: {today}")
+print(f"Date: {event_date}")
 print("=" * 80)
 
-# Try fetching orders for today
-response = requests.get(f"{BASE_URL}/orders?date={today.isoformat()}", headers=headers, timeout=10)
+# Try fetching orders for the event date
+response = requests.get(f"{BASE_URL}/orders?date={event_date.isoformat()}", headers=headers, timeout=10)
 print(f"\nStatus: {response.status_code}")
 
 if response.status_code == 200:

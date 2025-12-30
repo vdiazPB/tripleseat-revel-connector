@@ -163,7 +163,7 @@ def test_jera_injection():
             "ID": location_id  # C: Special Events
         },
         "Contact": {
-            "Code": "#c11"  # Supplier (#c11) that handles the order
+            "Code": "10"  # Customer contact for Special Events
         },
         "Shift": {
             "Code": "Production 01"  # Default production shift
@@ -172,7 +172,7 @@ def test_jera_injection():
         "OrderItems": order_items_formatted,
         "OrderNotes": f"TripleSeat Event {event_id} - {event.get('name')}",
         "OrderStatus": "Open",
-        "OrderViewType": "SalesOrder"  # Sales order through supplier to location
+        "OrderViewType": "SalesOrder"  # SalesOrder with customer contact
     }
     
     print(json.dumps(order_data, indent=2))
