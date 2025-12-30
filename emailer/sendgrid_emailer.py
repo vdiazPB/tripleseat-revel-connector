@@ -29,25 +29,41 @@ def send_success_email(event_id: str, order_details, correlation_id: str = None)
         # Get event details
         ts_client = TripleSeatAPIClient()
         event_data = ts_client.get_event(event_id)
-        event = event_data.get("event", {}) if event_data else {}
-        site_id = event.get("site_id")
+        event = event_data if event_data else {}  # get_event() already extracts the event object
+        
+        # Try to get site_id from event, fallback to environment
+        site_id = event.get("site_id") or os.getenv('TRIPLESEAT_SITE_ID')
+        logger.debug(f"[req-{correlation_id}] Event {event_id}: site_id={site_id}")
 
-        establishment = get_revel_establishment(site_id) or "Unknown"
+        # Get location name from mappings, or try to get from event directly
+        establishment = get_revel_establishment(site_id)
+        if not establishment:
+            # Try to get location from event data itself
+            establishment = event.get('location', {}).get('name') if isinstance(event.get('location'), dict) else event.get('location')
+        logger.debug(f"[req-{correlation_id}] Establishment lookup: site_id={site_id} -> {establishment}")
+        establishment = establishment or "Unknown"
 
         # Format event date
-        event_date = event.get('event_date', 'Unknown')
-        if event_date and event_date != 'Unknown':
+        event_date_raw = event.get('event_date')
+        event_date = event_date_raw or 'Unknown'
+        logger.debug(f"[req-{correlation_id}] Event date raw: {repr(event_date_raw)}")
+        
+        if event_date_raw and event_date_raw != 'Unknown':
             from datetime import datetime
-            date_str = str(event_date).strip()
+            date_str = str(event_date_raw).strip()
             try:
                 # First try MM/DD/YYYY format
                 if '/' in date_str:
-                    event_date = datetime.strptime(date_str, '%m/%d/%Y').strftime('%B %d, %Y')
+                    formatted_date = datetime.strptime(date_str, '%m/%d/%Y').strftime('%B %d, %Y')
+                    event_date = formatted_date
+                    logger.debug(f"[req-{correlation_id}] Formatted event_date (MM/DD/YYYY): {event_date}")
                 else:
                     # YYYY-MM-DD format
-                    event_date = datetime.strptime(date_str, '%Y-%m-%d').strftime('%B %d, %Y')
+                    formatted_date = datetime.strptime(date_str, '%Y-%m-%d').strftime('%B %d, %Y')
+                    event_date = formatted_date
+                    logger.debug(f"[req-{correlation_id}] Formatted event_date (YYYY-MM-DD): {event_date}")
             except Exception as e:
-                logger.debug(f"Could not parse event_date '{date_str}': {e}")
+                logger.debug(f"[req-{correlation_id}] Could not parse event_date '{date_str}': {e}")
                 event_date = 'Unknown'
 
         # Build items table
