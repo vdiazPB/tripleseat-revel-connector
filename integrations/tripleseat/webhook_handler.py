@@ -372,7 +372,7 @@ async def handle_tripleseat_webhook(
                 idempotency_cache[idempotency_key] = True
                 logger.info(f"[req-{correlation_id}] Idempotency registered: {idempotency_key}")
             
-            if not supplyit_result.is_valid:
+            if not supplyit_result.success:
                 logger.error(f"[req-{correlation_id}] Supply It injection failed: {supplyit_result.error}")
                 return {
                     "ok": True,
