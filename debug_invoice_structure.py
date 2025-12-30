@@ -12,7 +12,7 @@ load_dotenv()
 client = TripleSeatAPIClient()
 
 # Use the test event ID
-event_id = 55597622
+event_id = 55521609
 
 print(f"\n{'='*80}")
 print(f"FETCHING EVENT {event_id} FROM TRIPLE SEAT API")

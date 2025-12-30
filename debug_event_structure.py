@@ -3,6 +3,13 @@
 
 import json
 import logging
+import os
+import sys
+from dotenv import load_dotenv
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+load_dotenv()
+
 from integrations.tripleseat.api_client import TripleSeatAPIClient
 
 logging.basicConfig(level=logging.INFO)

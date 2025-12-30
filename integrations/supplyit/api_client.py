@@ -127,6 +127,9 @@ class SupplyItAPIClient:
     def get_product_by_name(self, location_id: int, product_name: str) -> Optional[Dict[str, Any]]:
         """Get product by name within a location.
         
+        Note: Supply It API requires X-Supplyit-LocationCode header to fetch products.
+        This method finds the location code first, then fetches products.
+        
         Args:
             location_id: Supply It location ID
             product_name: Name of the product
@@ -135,8 +138,24 @@ class SupplyItAPIClient:
             Product dict with ID, or None if not found
         """
         try:
+            # Find location code by ID (needed for products endpoint)
+            location_code = None
+            locations = self._get_all_locations()
+            for loc in locations:
+                if loc.get('ID') == location_id:
+                    location_code = loc.get('Code')
+                    break
+            
+            if not location_code:
+                logger.warning(f"[get_product_by_name] Location ID {location_id} not found")
+                return None
+            
+            # Fetch products with location code header (REQUIRED by API)
             url = f"{self.base_url}/products"
-            response = requests.get(url, headers=self._get_headers(), timeout=10)
+            headers = self._get_headers()
+            headers['X-Supplyit-LocationCode'] = location_code
+            
+            response = requests.get(url, headers=headers, timeout=10)
             
             if response.status_code != 200:
                 logger.warning(f"[get_product_by_name] HTTP {response.status_code}")
@@ -152,15 +171,34 @@ class SupplyItAPIClient:
                     logger.info(f"[get_product_by_name] Found product '{product_name}' with ID {prod.get('ID')}")
                     return prod
             
-            logger.warning(f"[get_product_by_name] Product '{product_name}' not found")
+            logger.warning(f"[get_product_by_name] Product '{product_name}' not found in location code '{location_code}'")
             return None
             
         except Exception as e:
             logger.error(f"[get_product_by_name] Error: {e}")
             return None
     
+    def _get_all_locations(self) -> List[Dict[str, Any]]:
+        """Get all locations for caching/lookup.
+        
+        Returns:
+            List of location dicts with ID, Code, Name, etc.
+        """
+        try:
+            url = f"{self.base_url}/locations"
+            response = requests.get(url, headers=self._get_headers(), timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                return data if isinstance(data, list) else data.get('locations', [])
+            return []
+        except Exception as e:
+            logger.error(f"[_get_all_locations] Error: {e}")
+            return []
+    
     def create_order(self, order_data: Dict[str, Any], correlation_id: str = None) -> Optional[Dict[str, Any]]:
         """Create an order in Supply It.
+        
+        Note: Supply It API requires X-Supplyit-LocationCode header to create orders.
         
         Args:
             order_data: Order dict with Location, OrderItems, OrderDate, etc.
@@ -177,7 +215,14 @@ class SupplyItAPIClient:
             logger.info(f"{req_id} Creating Supply It order")
             logger.debug(f"{req_id} Order payload: {order_data}")
             
-            response = requests.put(url, json=order_data, headers=self._get_headers(), timeout=30)
+            # Get location code from order data
+            location_code = order_data.get('Location', {}).get('Code', '8')
+            
+            # Add location code header (REQUIRED by API)
+            headers = self._get_headers()
+            headers['X-Supplyit-LocationCode'] = location_code
+            
+            response = requests.put(url, json=order_data, headers=headers, timeout=30)
             
             if response.status_code not in [200, 201]:
                 logger.error(f"{req_id} [create_order] HTTP {response.status_code}: {response.text}")

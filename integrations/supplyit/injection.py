@@ -3,9 +3,16 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 from integrations.supplyit.api_client import SupplyItAPIClient
 from integrations.tripleseat.api_client import TripleSeatAPIClient
+from integrations.revel.injection import parse_invoice_for_items
 from integrations.tripleseat.models import InjectionResult
 
 logger = logging.getLogger(__name__)
+
+# Product name mappings: TripleSeat -> JERA/Supply It
+# Handles cases where product names don't match exactly
+PRODUCT_NAME_MAPPINGS = {
+    'OG': 'O G',  # TripleSeat "OG" is "O G" with space in JERA
+}
 
 
 def inject_order_to_supplyit(
@@ -69,12 +76,53 @@ def inject_order_to_supplyit(
     location_id = special_events_location.get('ID')
     logger.info(f"{req_id} Using Supply It location: {special_events_location.get('Name')} (ID: {location_id})")
     
-    # Extract items from Triple Seat event
+    # Extract items from Triple Seat event - check multiple sources
     tripleseat_items = event.get('items', []) or event.get('menu_items', []) or event_data.get('items', [])
     
+    # If no items found, try fetching from booking custom fields
+    booking_id = event.get('booking_id')
+    if not tripleseat_items and booking_id:
+        logger.info(f"{req_id} No items in event, checking booking {booking_id}")
+        booking_url = f"{ts_client.base_url}/v1/bookings/{booking_id}"
+        try:
+            booking_response = ts_client.session.get(booking_url, timeout=10)
+            if booking_response.status_code == 200:
+                booking_data = booking_response.json()
+                booking_obj = booking_data.get('booking', {})
+                custom_fields = booking_obj.get('custom_fields', [])
+                
+                # Look for Boxing/Packing Slip custom field which contains the item name
+                packing_slip = next((cf for cf in custom_fields if 'packing' in cf.get('custom_field_name', '').lower() or 'boxing' in cf.get('custom_field_name', '').lower()), None)
+                
+                if packing_slip and packing_slip.get('value'):
+                    item_name = packing_slip.get('value').strip()
+                    logger.info(f"{req_id} Found item in custom field: {item_name}")
+                    tripleseat_items = [{'name': item_name, 'quantity': 1}]
+        except Exception as e:
+            logger.warning(f"{req_id} Failed to fetch booking details: {e}")
+    
+    # If still no items, try parsing invoice document
+    documents = event_data.get('documents', [])
+    if not tripleseat_items and documents:
+        logger.info(f"{req_id} No items found, attempting to parse invoice document")
+        # Find invoice document and its view URL
+        for doc in documents:
+            views = doc.get('views', [])
+            invoice_view = next((v for v in views if 'invoice' in v.get('name', '').lower()), None)
+            if invoice_view:
+                invoice_url = invoice_view.get('url')
+                if invoice_url:
+                    logger.info(f"{req_id} Found invoice URL, parsing for items")
+                    tripleseat_items, guest_name_from_invoice = parse_invoice_for_items(invoice_url, correlation_id)
+                    if tripleseat_items:
+                        logger.info(f"{req_id} Successfully extracted {len(tripleseat_items)} items from invoice")
+                        if guest_name_from_invoice and not guest_name:
+                            guest_name = guest_name_from_invoice
+                            logger.info(f"{req_id} Also extracted guest name: '{guest_name}'")
+                    break
+    
     if not tripleseat_items:
-        logger.warning(f"{req_id} No items found in Triple Seat event")
-        # Continue anyway - create order with zero items or skip
+        logger.warning(f"{req_id} No items found after checking all sources")
         return InjectionResult(True, error="No items to transfer")
     
     logger.info(f"{req_id} Found {len(tripleseat_items)} items in Triple Seat event")
@@ -85,8 +133,13 @@ def inject_order_to_supplyit(
         item_name = item.get('name') if isinstance(item, dict) else str(item)
         item_qty = item.get('quantity', 1) if isinstance(item, dict) else 1
         
-        # Try to find product in Supply It
-        product = supplyit_client.get_product_by_name(location_id, item_name)
+        # Apply product name mapping if available
+        jera_product_name = PRODUCT_NAME_MAPPINGS.get(item_name, item_name)
+        if jera_product_name != item_name:
+            logger.info(f"{req_id} [PRODUCT MAPPING] '{item_name}' -> '{jera_product_name}'")
+        
+        # Try to find product in Supply It (using mapped name)
+        product = supplyit_client.get_product_by_name(location_id, jera_product_name)
         
         if product:
             product_id = product.get('ID')
@@ -120,23 +173,17 @@ def inject_order_to_supplyit(
         return InjectionResult(True)
     
     # Build Supply It order
+    # Note: Include location code for API header requirement
     order_data = {
         "Location": {
             "ID": location_id,
-            "Name": special_events_location.get('Name')
+            "Code": "8"  # Special Events location code (required by API)
         },
-        "Contact": {
-            "Name": guest_name
-        } if guest_name else None,
         "OrderDate": event_date,
         "OrderItems": order_items,
         "OrderNotes": f"Triple Seat Event #{event_id}: {event_name}",
         "OrderStatus": "Open"
     }
-    
-    # Remove null Contact if not provided
-    if not guest_name:
-        del order_data["Contact"]
     
     logger.info(f"{req_id} [INJECTION] Creating Supply It order with {len(order_items)} items")
     
