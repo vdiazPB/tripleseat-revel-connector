@@ -148,20 +148,31 @@ def test_jera_injection():
     print("STEP 5: Order structure")
     print("-" * 70)
     
+    # Format order items according to Supply It API spec
+    order_items_formatted = [
+        {
+            "Product": {"ID": item['Product']['ID']},
+            "StartingOrder": item['UnitsOrdered'],
+            "UnitPrice": item.get('UnitPrice', 0)
+        }
+        for item in order_items
+    ]
+    
     order_data = {
         "Location": {
-            "ID": location_id,
-            "Code": location.get('Code'),
-            "Name": location_name
+            "ID": location_id
         },
         "Contact": {
-            "Name": event.get('client_name') or event.get('guest_name') or event.get('name', 'Event'),
-            "Code": "DEFAULT"
+            "Code": "Retail"  # Customer contact for SalesOrders
+        },
+        "Shift": {
+            "Code": "Production 01"  # Default production shift
         },
         "OrderDate": event.get('event_date_iso8601', datetime.now().date().isoformat()),
-        "OrderItems": order_items,
+        "OrderItems": order_items_formatted,
         "OrderNotes": f"TripleSeat Event {event_id} - {event.get('name')}",
-        "OrderStatus": "Open"
+        "OrderStatus": "Open",
+        "OrderViewType": "SalesOrder"
     }
     
     print(json.dumps(order_data, indent=2))

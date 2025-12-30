@@ -173,16 +173,32 @@ def inject_order_to_supplyit(
         return InjectionResult(True)
     
     # Build Supply It order
-    # Note: Include location code for API header requirement
+    # Note: OrderItems must use StartingOrder instead of UnitsOrdered (per API spec)
+    # Contact and Shift must be included with Code field (per API spec)
+    order_items_formatted = [
+        {
+            "Product": {"ID": item['Product']['ID']},
+            "StartingOrder": item['UnitsOrdered'],
+            "UnitPrice": item.get('UnitPrice', 0)
+        }
+        for item in order_items
+    ]
+    
     order_data = {
         "Location": {
-            "ID": location_id,
-            "Code": "8"  # Special Events location code (required by API)
+            "ID": location_id  # ID only, no Code in request
+        },
+        "Contact": {
+            "Code": "Retail"  # Customer contact for SalesOrders
+        },
+        "Shift": {
+            "Code": "Production 01"  # Production shift
         },
         "OrderDate": event_date,
-        "OrderItems": order_items,
+        "OrderItems": order_items_formatted,
         "OrderNotes": f"Triple Seat Event #{event_id}: {event_name}",
-        "OrderStatus": "Open"
+        "OrderStatus": "Open",
+        "OrderViewType": "SalesOrder"
     }
     
     logger.info(f"{req_id} [INJECTION] Creating Supply It order with {len(order_items)} items")
