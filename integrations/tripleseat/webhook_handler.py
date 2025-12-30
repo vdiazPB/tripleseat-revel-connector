@@ -193,9 +193,9 @@ async def handle_tripleseat_webhook(
     
     # ===== STEP 2: IDEMPOTENCY CHECK =====
     # Use trigger_type + event_id + updated_at as idempotency key
-    # Skip idempotency check during testing (test_location_override enabled)
+    # ALWAYS check idempotency to prevent duplicate orders
     primary_id = event_id or booking_id
-    if primary_id and updated_at and not test_location_override:
+    if primary_id and updated_at:
         idempotency_key = f"{trigger_type}:{primary_id}:{updated_at}"
         if idempotency_key in idempotency_cache:
             logger.info(f"[req-{correlation_id}] Duplicate webhook detected (idempotency): {idempotency_key}")
@@ -207,9 +207,6 @@ async def handle_tripleseat_webhook(
             }
     else:
         idempotency_key = None
-    
-    if test_location_override:
-        logger.info(f"[req-{correlation_id}] Idempotency check SKIPPED (test_location_override enabled)")
 
     # ===== STEP 3: EXTRACT EVENT FROM PAYLOAD (PAYLOAD-FIRST) =====
     event = payload.get("event", {})
@@ -271,87 +268,220 @@ async def handle_tripleseat_webhook(
 
     # ===== STEP 5: PROCESSING PIPELINE =====
     try:
-        # STEP 5a: Validation
-        if skip_validation:
-            logger.info(f"[req-{correlation_id}] Validation SKIPPED (test/injection mode)")
-            validation_passed = True
-        else:
-            validation_result = validate_event(event_id, correlation_id)
-            validation_passed = validation_result.is_valid
-            
-            # Handle authorization denial gracefully
-            if not validation_passed and validation_result.reason == "AUTHORIZATION_DENIED":
-                logger.info(f"[req-{correlation_id}] Event {event_id} authorization denied by TripleSeat")
-                
-                # Register idempotency on safe acknowledgment
-                if idempotency_key:
-                    idempotency_cache[idempotency_key] = True
-                    logger.info(f"[req-{correlation_id}] Idempotency registered: {idempotency_key}")
-                
-                return {
-                    "ok": True,
-                    "processed": False,
-                    "authorization_status": "DENIED",
-                    "reason": "TRIPLESEAT_AUTHORIZATION_DENIED",
-                    "trigger": trigger_type
-                }
-        if not validation_passed:
-            logger.info(f"[req-{correlation_id}] Event {event_id} failed validation: {validation_result.reason}")
+        # STEP 5a: Extract event status and determine routing
+        event_status = event.get('status', '').upper()
+        logger.info(f"[req-{correlation_id}] Event status: {event_status}")
+        
+        # Route based on status:
+        # - CLOSED: Process for Revel (POS injection)
+        # - DEFINITE: Process for Supply It (Special Events/catering)
+        # - Other: Reject
+        
+        is_revel_event = event_status == 'CLOSED'
+        is_supplyit_event = event_status == 'DEFINITE'
+        
+        if not is_revel_event and not is_supplyit_event:
+            logger.info(f"[req-{correlation_id}] Event {event_id} has status '{event_status}' - not CLOSED (Revel) or DEFINITE (Supply It)")
             return {
-                "ok": False,
+                "ok": True,
                 "processed": False,
-                "reason": f"VALIDATION_FAILED_{validation_result.reason}",
+                "reason": f"INVALID_STATUS:{event_status}",
                 "trigger": trigger_type
             }
+        
+        # STEP 5b: Validation (only for Revel events)
+        if is_revel_event:
+            if skip_validation:
+                logger.info(f"[req-{correlation_id}] Validation SKIPPED (test/injection mode)")
+                validation_passed = True
+            else:
+                validation_result = validate_event(event_id, correlation_id)
+                validation_passed = validation_result.is_valid
+                
+                # Handle authorization denial gracefully
+                if not validation_passed and validation_result.reason == "AUTHORIZATION_DENIED":
+                    logger.info(f"[req-{correlation_id}] Event {event_id} authorization denied by TripleSeat")
+                    
+                    # Register idempotency on safe acknowledgment
+                    if idempotency_key:
+                        idempotency_cache[idempotency_key] = True
+                        logger.info(f"[req-{correlation_id}] Idempotency registered: {idempotency_key}")
+                    
+                    return {
+                        "ok": True,
+                        "processed": False,
+                        "authorization_status": "DENIED",
+                        "reason": "TRIPLESEAT_AUTHORIZATION_DENIED",
+                        "trigger": trigger_type
+                    }
+            if not validation_passed:
+                logger.info(f"[req-{correlation_id}] Event {event_id} failed validation: {validation_result.reason}")
+                return {
+                    "ok": False,
+                    "processed": False,
+                    "reason": f"VALIDATION_FAILED_{validation_result.reason}",
+                    "trigger": trigger_type
+                }
 
-        # STEP 5b: Time Gate
-        if skip_time_gate:
-            logger.info(f"[req-{correlation_id}] Time gate: SKIPPED (test mode)")
-            time_gate_status = "OPEN"
-        else:
-            # Pass event data from webhook to time_gate to avoid redundant API call
-            time_gate_result = check_time_gate(event_id, correlation_id, event_data={'event': event})
-            if time_gate_result == "PROCEED":
-                logger.info(f"[req-{correlation_id}] Time gate: OPEN")
+        # STEP 5c: Time Gate (only for Revel events)
+        if is_revel_event:
+            if skip_time_gate:
+                logger.info(f"[req-{correlation_id}] Time gate: SKIPPED (test mode)")
                 time_gate_status = "OPEN"
             else:
-                logger.info(f"[req-{correlation_id}] Time gate: CLOSED ({time_gate_result})")
-                time_gate_status = "CLOSED"
+                # Pass event data from webhook to time_gate to avoid redundant API call
+                time_gate_result = check_time_gate(event_id, correlation_id, event_data={'event': event})
+                if time_gate_result == "PROCEED":
+                    logger.info(f"[req-{correlation_id}] Time gate: OPEN")
+                    time_gate_status = "OPEN"
+                else:
+                    logger.info(f"[req-{correlation_id}] Time gate: CLOSED (result={time_gate_result})")
+                    
+                    # Register idempotency on safe acknowledgment
+                    if idempotency_key:
+                        idempotency_cache[idempotency_key] = True
+                        logger.info(f"[req-{correlation_id}] Idempotency registered: {idempotency_key}")
+                    
+                    return {
+                        "ok": True,
+                        "processed": False,
+                        "reason": f"TIME_GATE_CLOSED_{time_gate_result}",
+                        "trigger": trigger_type
+                    }
+        
+        # STEP 5d: Process Supply It event (if DEFINITE status)
+        if is_supplyit_event:
+            logger.info(f"[req-{correlation_id}] Processing DEFINITE event for Supply It")
+            
+            from integrations.supplyit.injection import inject_order_to_supplyit
+            
+            # Get configuration
+            connector_enabled = os.getenv('ENABLE_CONNECTOR', 'true').lower() == 'true'
+            dry_run_mode = os.getenv('DRY_RUN_MODE', 'false').lower() == 'true'
+            
+            supplyit_result = inject_order_to_supplyit(
+                event_id=event_id,
+                correlation_id=correlation_id,
+                dry_run=dry_run_mode,
+                enable_connector=connector_enabled,
+                webhook_payload=payload
+            )
+            
+            # Register idempotency
+            if idempotency_key:
+                idempotency_cache[idempotency_key] = True
+                logger.info(f"[req-{correlation_id}] Idempotency registered: {idempotency_key}")
+            
+            if not supplyit_result.is_valid:
+                logger.error(f"[req-{correlation_id}] Supply It injection failed: {supplyit_result.error}")
+                return {
+                    "ok": True,
+                    "processed": False,
+                    "reason": f"SUPPLYIT_FAILED_{supplyit_result.error}",
+                    "trigger": trigger_type
+                }
+            
+            logger.info(f"[req-{correlation_id}] Supply It order created successfully")
+            return {
+                "ok": True,
+                "processed": True,
+                "event_id": event_id,
+                "system": "Supply It",
+                "reason": "SUPPLYIT_INJECTED",
+                "trigger": trigger_type
+            }
+        
+        # STEP 5e: Process Revel event (if CLOSED status)
+        if is_revel_event:
+            # STEP 5e1: Trigger Sync Endpoint (webhook -> reconciliation)
+            # Instead of direct injection, call the sync endpoint which handles:
+            # - Revel idempotency check (prevent duplicates)
+            # - Full order validation
+            # - Audit logging with correlation ID
+            try:
+                import requests
+                sync_url = os.getenv('SYNC_ENDPOINT_URL', 'http://127.0.0.1:8000/api/sync/tripleseat')
                 
-                # Register idempotency on safe acknowledgment
+                # Call sync endpoint with event_id
+                response = requests.get(
+                    sync_url,
+                    params={'event_id': event_id},
+                    timeout=30
+                )
+                
+                if response.status_code != 200:
+                    logger.error(f"[req-{correlation_id}] Sync endpoint returned {response.status_code}: {response.text[:500]}")
+                    send_failure_email(event_id, f"Sync endpoint error: {response.status_code}", correlation_id)
+                    return {
+                        "ok": False,
+                        "processed": False,
+                        "reason": f"SYNC_ENDPOINT_ERROR_{response.status_code}",
+                        "trigger": trigger_type
+                    }
+                
+                sync_result = response.json()
+                
+                if not sync_result.get('success'):
+                    logger.error(f"[req-{correlation_id}] Sync returned failure: {sync_result.get('error')}")
+                    send_failure_email(event_id, f"Sync failed: {sync_result.get('error')}", correlation_id)
+                    return {
+                        "ok": False,
+                        "processed": False,
+                        "reason": f"SYNC_FAILED_{sync_result.get('error', 'UNKNOWN')}",
+                        "trigger": trigger_type
+                    }
+                
+                # Extract revel_order_id from sync response
+                events = sync_result.get('events', [])
+                revel_order_id = None
+                if events and len(events) > 0:
+                    revel_order_id = events[0].get('revel_order_id')
+                    event_name = events[0].get('name')
+                    event_date = events[0].get('date')
+                
+                logger.info(f"[req-{correlation_id}] Event {event_id} synced successfully - Revel Order: {revel_order_id}")
+                
+                # Register idempotency
                 if idempotency_key:
                     idempotency_cache[idempotency_key] = True
                     logger.info(f"[req-{correlation_id}] Idempotency registered: {idempotency_key}")
                 
+                # STEP 5e2: Success Email
+                # Create minimal order details for email
+                order_details = {
+                    'event_id': event_id,
+                    'revel_order_id': revel_order_id,
+                    'event_name': event_name if events else 'Unknown'
+                }
+                send_success_email(event_id, order_details, correlation_id)
+                
                 return {
                     "ok": True,
-                    "processed": False,
-                    "reason": f"TIME_GATE_CLOSED_{time_gate_status}",
+                    "processed": True,
+                    "event_id": event_id,
+                    "revel_order_id": revel_order_id,
+                    "reason": "REVEL_INJECTED",
                     "trigger": trigger_type
                 }
-
-        # STEP 5c: Revel Injection
-        injection_result = inject_order(
-            event_id, 
-            correlation_id, 
-            dry_run=dry_run,
-            enable_connector=enable_connector,
-            test_location_override=test_location_override,
-            test_establishment_id=test_establishment_id,
-            webhook_payload=payload  # Pass webhook payload to avoid API fetch
-        )
-        if not injection_result.success:
-            logger.error(f"[req-{correlation_id}] Event {event_id} injection failed: {injection_result.error}")
-            send_failure_email(event_id, injection_result.error, correlation_id)
-            return {
+            
+            except requests.exceptions.Timeout:
+                logger.error(f"[req-{correlation_id}] Sync endpoint timed out")
+                send_failure_email(event_id, "Sync endpoint timeout", correlation_id)
+                return {
+                    "ok": False,
+                    "processed": False,
+                    "reason": "SYNC_ENDPOINT_TIMEOUT",
+                    "trigger": trigger_type
+                }
+            except Exception as e:
+                logger.error(f"[req-{correlation_id}] Sync call failed: {e}")
+                send_failure_email(event_id, f"Sync error: {str(e)}", correlation_id)
+                return {
                 "ok": False,
                 "processed": False,
-                "reason": f"INJECTION_FAILED_{injection_result.error}",
+                "reason": f"SYNC_CALL_FAILED_{type(e).__name__}",
                 "trigger": trigger_type
             }
-
-        # STEP 5d: Success Email
-        send_success_email(event_id, injection_result.order_details, correlation_id)
 
         # Register idempotency on success
         if idempotency_key:
