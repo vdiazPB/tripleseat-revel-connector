@@ -37,12 +37,18 @@ def send_success_email(event_id: str, order_details, correlation_id: str = None)
         # Format event date
         event_date = event.get('event_date', 'Unknown')
         if event_date and event_date != 'Unknown':
+            from datetime import datetime
+            date_str = str(event_date).strip()
             try:
-                from datetime import datetime
-                # Try to parse and format the date
-                event_date = datetime.strptime(str(event_date), '%Y-%m-%d').strftime('%B %d, %Y')
-            except:
-                pass
+                # First try MM/DD/YYYY format
+                if '/' in date_str:
+                    event_date = datetime.strptime(date_str, '%m/%d/%Y').strftime('%B %d, %Y')
+                else:
+                    # YYYY-MM-DD format
+                    event_date = datetime.strptime(date_str, '%Y-%m-%d').strftime('%B %d, %Y')
+            except Exception as e:
+                logger.debug(f"Could not parse event_date '{date_str}': {e}")
+                event_date = 'Unknown'
 
         # Build items table
         items_html = ""
