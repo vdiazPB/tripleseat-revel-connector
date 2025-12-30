@@ -55,12 +55,15 @@ def inject_order_to_supplyit(
     
     logger.info(f"{req_id} Event details: name='{event_name}', date='{event_date}', guest='{guest_name}', total=${event_total}")
     
-    # Get Supply It client and Special Events location
+    # Get Supply It client and locate the correct location
+    # Location mapping: site_id 15691 (Special Events) -> Supply It location code "8" (C: Special Events)
     supplyit_client = SupplyItAPIClient()
-    special_events_location = supplyit_client.get_location_by_name("Special Events")
+    
+    # Get location by code "8" (C: Special Events)
+    special_events_location = supplyit_client.get_location_by_code("8")
     
     if not special_events_location:
-        logger.error(f"{req_id} Special Events location not found in Supply It")
+        logger.error(f"{req_id} Could not find Supply It location code '8' (C: Special Events)")
         return InjectionResult(False, error="Special Events location not found")
     
     location_id = special_events_location.get('ID')

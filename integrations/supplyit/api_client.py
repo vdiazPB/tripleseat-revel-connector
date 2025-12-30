@@ -15,7 +15,7 @@ class SupplyItAPIClient:
     """
     
     def __init__(self):
-        self.base_url = os.getenv('SUPPLYIT_API_BASE', 'https://api.supplyit.com/api/v2')
+        self.base_url = os.getenv('SUPPLYIT_API_BASE', 'https://app.supplyit.com/api/v2')
         self.api_key = os.getenv('JERA_API_KEY')
         self.username = os.getenv('JERA_API_USERNAME')
         
@@ -23,15 +23,18 @@ class SupplyItAPIClient:
             logger.error("JERA_API_KEY or JERA_API_USERNAME not configured")
             return
         
-        logger.info("✅ SupplyItAPIClient initialized with JERA credentials")
+        logger.info("✅ SupplyItAPIClient initialized with credentials")
     
     def _get_headers(self) -> Dict[str, str]:
-        """Get request headers with JERA API key and username authentication."""
-        return {
-            'X-API-Key': self.api_key,
-            'X-API-Username': self.username,
+        """Get request headers with Supply It API authentication."""
+        headers = {
+            'Authorization': self.api_key,
+            'Accept': 'application/json',
             'Content-Type': 'application/json'
         }
+        if self.username:
+            headers['X-Api-User'] = self.username
+        return headers
     
     def get_location_by_name(self, location_name: str) -> Optional[Dict[str, Any]]:
         """Get location ID by name.
@@ -65,6 +68,40 @@ class SupplyItAPIClient:
             
         except Exception as e:
             logger.error(f"[get_location_by_name] Error: {e}")
+            return None
+    
+    def get_location_by_code(self, location_code: str) -> Optional[Dict[str, Any]]:
+        """Get location by code.
+        
+        Args:
+            location_code: Code of the location (e.g., "8", "c11")
+        
+        Returns:
+            Location dict with ID and details, or None if not found
+        """
+        try:
+            url = f"{self.base_url}/locations"
+            response = requests.get(url, headers=self._get_headers(), timeout=10)
+            
+            if response.status_code != 200:
+                logger.warning(f"[get_location_by_code] HTTP {response.status_code}")
+                return None
+            
+            locations = response.json()
+            if not isinstance(locations, list):
+                locations = locations.get('locations', [])
+            
+            # Find location by code (exact match, case-insensitive)
+            for loc in locations:
+                if str(loc.get('Code', '')).lower() == str(location_code).lower():
+                    logger.info(f"[get_location_by_code] Found location code '{location_code}' with ID {loc.get('ID')}")
+                    return loc
+            
+            logger.warning(f"[get_location_by_code] Location code '{location_code}' not found")
+            return None
+            
+        except Exception as e:
+            logger.error(f"[get_location_by_code] Error: {e}")
             return None
     
     def get_contact_by_name(self, location_id: int, contact_name: str) -> Optional[Dict[str, Any]]:

@@ -1,13 +1,40 @@
 """
 Test webhook processing directly without FastAPI server
 """
-import asyncio
+import logging
+logging.basicConfig(level=logging.INFO, format='%(name)s:%(levelname)s:%(message)s')
+
+from dotenv import load_dotenv
+load_dotenv()
+
 import json
 from integrations.tripleseat.webhook_handler import handle_tripleseat_webhook
 
-# Test webhook payload
+# Test webhook payload with realistic Triple Seat data
 payload = {
     "webhook_trigger_type": "STATUS_CHANGE_EVENT",
+    "event": {
+        "id": 55521609,
+        "name": "Jon Ponder",
+        "phone": "(555) 123-4567",
+        "event_date": "12/28/2025",
+        "event_date_iso8601": "2025-12-28",
+        "status": "DEFINITE",
+        "site_id": 15691,
+        "event_start": "12/28/2025 6:00 PM",
+        "event_end": "12/28/2025 6:15 PM",
+        "updated_at": "12/28/2025 12:56 PM",
+        "items": [
+            {
+                "id": 579,
+                "name": "TRIPLE OG",
+                "quantity": 5,
+                "price": 2.00,
+                "item_type": "product"
+            }
+        ]
+    }
+}
     "event": {
         "id": 55521609,
         "name": "Jon Ponder",
