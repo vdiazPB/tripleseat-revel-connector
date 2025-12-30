@@ -186,10 +186,10 @@ def inject_order_to_supplyit(
     
     order_data = {
         "Location": {
-            "ID": location_id  # ID only, no Code in request
+            "ID": location_id  # C: Special Events (Code 8)
         },
         "Contact": {
-            "Code": "Retail"  # Customer contact for SalesOrders
+            "Code": "#c11"  # Supplier (#c11) that handles the order
         },
         "Shift": {
             "Code": "Production 01"  # Production shift
@@ -198,7 +198,7 @@ def inject_order_to_supplyit(
         "OrderItems": order_items_formatted,
         "OrderNotes": f"Triple Seat Event #{event_id}: {event_name}",
         "OrderStatus": "Open",
-        "OrderViewType": "SalesOrder"
+        "OrderViewType": "SalesOrder"  # Sales order through supplier to location
     }
     
     logger.info(f"{req_id} [INJECTION] Creating Supply It order with {len(order_items)} items")
