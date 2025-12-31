@@ -1,15 +1,16 @@
 import logging
+import os
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from integrations.supplyit.api_client import SupplyItAPIClient
 from integrations.tripleseat.api_client import TripleSeatAPIClient
 from integrations.revel.injection import parse_invoice_for_items
 from integrations.tripleseat.models import InjectionResult
+from integrations.admin.settings_manager import get_setting
 
 logger = logging.getLogger(__name__)
 
 # Product name mappings: TripleSeat -> JERA/Supply It
-# Handles cases where product names don't match exactly
 PRODUCT_NAME_MAPPINGS = {
     'OG': 'O G',  # TripleSeat "OG" is "O G" with space in JERA
 }
@@ -38,10 +39,19 @@ def inject_order_to_supplyit(
     """
     req_id = f"[req-{correlation_id}]" if correlation_id else "[supplyit]"
     
+    # Load settings from persistent config file
+    jera_testing_mode = get_setting('jera.testing_mode', False)
+    
+    # Apply JERA testing mode from settings
+    effective_dry_run = dry_run or jera_testing_mode
+    if jera_testing_mode:
+        logger.warning(f"{req_id} JERA TESTING MODE ACTIVE (from settings) - dry_run forced")
+    
     # Safety checks
     if not enable_connector:
         logger.warning(f"{req_id} CONNECTOR DISABLED – blocking Supply It write")
         return InjectionResult(True, error="CONNECTOR_DISABLED")
+    
     
     # Fetch event details from TripleSeat
     logger.info(f"{req_id} Fetching event {event_id} from TripleSeat API")
@@ -165,7 +175,7 @@ def inject_order_to_supplyit(
     logger.info(f"{req_id} Resolved {len(order_items)}/{len(tripleseat_items)} items to Supply It products")
     
     # DRY RUN check
-    if dry_run:
+    if effective_dry_run:
         logger.info(f"{req_id} [DRY_RUN] Would create order for {len(order_items)} items in Special Events location")
         for idx, item in enumerate(order_items):
             logger.info(f"{req_id} [DRY_RUN] Item {idx+1}: {item['Product']['Name']} x{item['UnitsOrdered']}")

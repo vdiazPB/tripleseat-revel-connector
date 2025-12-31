@@ -1,0 +1,81 @@
+from fastapi import APIRouter, HTTPException
+from integrations.admin.settings_manager import get_all_settings, set_setting
+import logging
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+@router.get("/")
+async def get_settings():
+    """Get all application settings."""
+    try:
+        settings = get_all_settings()
+        return {
+            "success": True,
+            "settings": settings
+        }
+    except Exception as e:
+        logger.error(f"Failed to get settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{key}")
+async def get_setting(key: str):
+    """Get a specific setting by key (e.g., 'jera.testing_mode')."""
+    try:
+        from integrations.admin.settings_manager import get_setting
+        value = get_setting(key)
+        return {
+            "success": True,
+            "key": key,
+            "value": value
+        }
+    except Exception as e:
+        logger.error(f"Failed to get setting {key}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{key}")
+async def update_setting(key: str, value: bool):
+    """Update a setting by key (e.g., POST /api/settings/jera.testing_mode with body: true)."""
+    try:
+        success = set_setting(key, value)
+        
+        if success:
+            from integrations.admin.settings_manager import get_setting
+            new_value = get_setting(key)
+            logger.info(f"✅ Setting updated: {key} = {new_value}")
+            return {
+                "success": True,
+                "key": key,
+                "value": new_value,
+                "message": f"Setting '{key}' updated to {new_value}"
+            }
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to save setting {key}")
+    except Exception as e:
+        logger.error(f"Failed to update setting {key}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/toggle/{key}")
+async def toggle_setting(key: str):
+    """Toggle a boolean setting (flip true to false, false to true)."""
+    try:
+        from integrations.admin.settings_manager import get_setting
+        current = get_setting(key, False)
+        new_value = not current
+        
+        success = set_setting(key, new_value)
+        
+        if success:
+            logger.info(f"✅ Setting toggled: {key} = {new_value}")
+            return {
+                "success": True,
+                "key": key,
+                "value": new_value,
+                "message": f"Setting '{key}' toggled to {new_value}"
+            }
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to toggle setting {key}")
+    except Exception as e:
+        logger.error(f"Failed to toggle setting {key}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

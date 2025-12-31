@@ -3,6 +3,7 @@ import logging
 from integrations.tripleseat.webhook_handler import handle_tripleseat_webhook
 from integrations.revel.api_client import RevelAPIClient
 from integrations.admin.dashboard import get_settings_endpoints
+from integrations.admin.settings_routes import router as settings_router
 import os
 from dotenv import load_dotenv
 from datetime import datetime
@@ -97,6 +98,10 @@ app = FastAPI(title="TripleSeat-Revel Connector", lifespan=lifespan)
 # Include admin dashboard router
 admin_router = get_settings_endpoints()
 app.include_router(admin_router)
+
+# Include settings management router
+app.include_router(settings_router)
+
 
 # Startup logging & production safety flags
 env = os.getenv('ENV', 'development')
