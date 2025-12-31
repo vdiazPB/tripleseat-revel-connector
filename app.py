@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException, Query
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import logging
 from integrations.tripleseat.webhook_handler import handle_tripleseat_webhook
 from integrations.revel.api_client import RevelAPIClient
@@ -95,6 +96,11 @@ async def lifespan(app: FastAPI):
     await shutdown_event()
 
 app = FastAPI(title="TripleSeat-Revel Connector", lifespan=lifespan)
+
+# Mount static files
+from pathlib import Path
+static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Include admin dashboard router
 admin_router = get_settings_endpoints()

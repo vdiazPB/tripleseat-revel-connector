@@ -642,16 +642,7 @@ def get_dashboard_html() -> str:
                 <div class="platform-flow">
                     <div class="platform-badge tripleseat">
                         <div class="platform-logo tripleseat-logo">
-                            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <!-- TripleSeat cyan sound wave -->
-                                <rect x="10" y="25" width="6" height="50" rx="3" fill="white"/>
-                                <rect x="22" y="15" width="6" height="70" rx="3" fill="white"/>
-                                <rect x="34" y="20" width="6" height="60" rx="3" fill="white"/>
-                                <rect x="46" y="15" width="6" height="70" rx="3" fill="white"/>
-                                <rect x="58" y="25" width="6" height="50" rx="3" fill="white"/>
-                                <rect x="70" y="20" width="6" height="60" rx="3" fill="white"/>
-                                <rect x="82" y="30" width="6" height="40" rx="3" fill="white"/>
-                            </svg>
+                            <img src="/static/tripleseat-logo.svg" alt="TripleSeat" style="width: 100%; height: 100%; object-fit: contain;">
                         </div>
                         <span class="platform-name">TripleSeat</span>
                     </div>
@@ -660,14 +651,7 @@ def get_dashboard_html() -> str:
                     
                     <div class="platform-badge revel">
                         <div class="platform-logo revel-logo">
-                            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <!-- Revel mixer bars -->
-                                <rect x="15" y="30" width="8" height="40" rx="4" fill="white"/>
-                                <rect x="30" y="20" width="8" height="50" rx="4" fill="white"/>
-                                <rect x="45" y="25" width="8" height="45" rx="4" fill="white"/>
-                                <rect x="60" y="20" width="8" height="50" rx="4" fill="white"/>
-                                <rect x="75" y="30" width="8" height="40" rx="4" fill="white"/>
-                            </svg>
+                            <img src="/static/revel-logo.svg" alt="Revel POS" style="width: 100%; height: 100%; object-fit: contain;">
                         </div>
                         <span class="platform-name">Revel POS</span>
                     </div>
@@ -676,10 +660,7 @@ def get_dashboard_html() -> str:
                     
                     <div class="platform-badge supplying">
                         <div class="platform-logo supplying-logo">
-                            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <!-- SupplyIt S logo -->
-                                <path d="M 70 25 Q 80 25 80 35 Q 80 42 65 45 Q 85 48 85 55 Q 85 70 70 70 Q 55 70 55 60 L 65 60 Q 65 65 70 65 Q 75 65 75 60 Q 75 55 65 52 Q 45 48 45 40 Q 45 28 60 28 Q 70 28 72 35 L 62 35 Q 61 32 60 32 Q 55 32 55 37 Q 55 42 70 45" fill="white"/>
-                            </svg>
+                            <img src="/static/supplyit-logo.svg" alt="SupplyIt" style="width: 100%; height: 100%; object-fit: contain;">
                         </div>
                         <span class="platform-name">SupplyIt</span>
                     </div>
