@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 # Settings file path
-SETTINGS_FILE = Path(__file__).parent.parent.parent / "settings.json"
+SETTINGS_FILE = Path(__file__).parent.parent.parent / "config" / "settings.json"
 
 
 def load_settings() -> Dict[str, Any]:

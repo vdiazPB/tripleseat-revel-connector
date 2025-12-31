@@ -6,8 +6,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Path to settings file (in config directory)
-SETTINGS_FILE = Path(__file__).parent.parent / 'config' / 'settings.json'
+# Path to settings file (at project root: config/settings.json)
+SETTINGS_FILE = Path(__file__).parent.parent.parent / 'config' / 'settings.json'
 
 class SettingsManager:
     """Manage application settings from persistent JSON file."""
