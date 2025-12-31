@@ -195,13 +195,15 @@ class SupplyItAPIClient:
             logger.error(f"[_get_all_locations] Error: {e}")
             return []
     
-    def create_order(self, order_data: Dict[str, Any], correlation_id: str = None) -> Optional[Dict[str, Any]]:
+    def create_order(self, order_data: Dict[str, Any], location_code: str = '#c11', correlation_id: str = None) -> Optional[Dict[str, Any]]:
         """Create an order in Supply It.
         
         Note: Supply It API requires X-Supplyit-LocationCode header to create orders.
+        Location should NOT be in the request body - only in the header.
         
         Args:
-            order_data: Order dict with Location, OrderItems, OrderDate, etc.
+            order_data: Order dict with Contact, OrderItems, OrderDate, etc. (no Location)
+            location_code: Location code for X-Supplyit-LocationCode header
             correlation_id: Request correlation ID for logging
         
         Returns:
@@ -215,8 +217,11 @@ class SupplyItAPIClient:
             logger.info(f"{req_id} Creating Supply It order")
             logger.debug(f"{req_id} Order payload: {order_data}")
             
-            # Get location code from order data
-            location_code = order_data.get('Location', {}).get('Code', '8')
+            # Ensure standard fields are set (per official API example)
+            if 'ExcludeFromForecasting' not in order_data:
+                order_data['ExcludeFromForecasting'] = False
+            if 'IsSpecial' not in order_data:
+                order_data['IsSpecial'] = False
             
             # Add location code header (REQUIRED by API)
             headers = self._get_headers()
@@ -225,7 +230,8 @@ class SupplyItAPIClient:
             response = requests.put(url, json=order_data, headers=headers, timeout=30)
             
             if response.status_code not in [200, 201]:
-                logger.error(f"{req_id} [create_order] HTTP {response.status_code}: {response.text}")
+                logger.error(f"{req_id} [create_order] HTTP {response.status_code}")
+                logger.error(f"{req_id} [create_order] Response: {response.text}")
                 return None
             
             created_order = response.json()

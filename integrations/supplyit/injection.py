@@ -66,15 +66,16 @@ def inject_order_to_supplyit(
     # Location mapping: site_id 15691 (Special Events) -> Supply It location code "8" (C: Special Events)
     supplyit_client = SupplyItAPIClient()
     
-    # Get location by code "8" (C: Special Events)
-    special_events_location = supplyit_client.get_location_by_code("8")
+    # Get location by code "#c11" (Sunset Commissary supplier location)
+    sunset_location = supplyit_client.get_location_by_code("#c11")
     
-    if not special_events_location:
-        logger.error(f"{req_id} Could not find Supply It location code '8' (C: Special Events)")
-        return InjectionResult(False, error="Special Events location not found")
+    if not sunset_location:
+        logger.error(f"{req_id} Could not find Supply It location code '#c11' (Sunset Commissary)")
+        return InjectionResult(False, error="Sunset Commissary location not found")
     
-    location_id = special_events_location.get('ID')
-    logger.info(f"{req_id} Using Supply It location: {special_events_location.get('Name')} (ID: {location_id})")
+    location_id = sunset_location.get('ID')
+    location_code = sunset_location.get('Code')
+    logger.info(f"{req_id} Using Supply It location: {sunset_location.get('Name')} (ID: {location_id}, Code: {location_code})")
     
     # Extract items from Triple Seat event - check multiple sources
     tripleseat_items = event.get('items', []) or event.get('menu_items', []) or event_data.get('items', [])
@@ -147,10 +148,9 @@ def inject_order_to_supplyit(
             
             order_item = {
                 "Product": {
-                    "ID": product_id,
-                    "Name": item_name
+                    "ID": product_id
                 },
-                "UnitsOrdered": item_qty,
+                "StartingOrder": item_qty,
                 "UnitPrice": unit_price
             }
             order_items.append(order_item)
@@ -172,9 +172,10 @@ def inject_order_to_supplyit(
         logger.info(f"{req_id} [DRY_RUN] Supply It write PREVENTED – DRY_RUN=true")
         return InjectionResult(True)
     
-    # Build Supply It order
-    # Note: OrderItems must use StartingOrder instead of UnitsOrdered (per API spec)
-    # Contact and Shift must be included with Code field (per API spec)
+    # Build Supply It order (Location is passed via header, not body per API spec)
+    # Note: OrderItems must use StartingOrder (per API spec)
+    # Contact Code "8" = C: Special Events internal contact
+    # Location header "#c11" = Sunset Commissary
     order_items_formatted = [
         {
             "Product": {"ID": item['Product']['ID']},
@@ -185,26 +186,25 @@ def inject_order_to_supplyit(
     ]
     
     order_data = {
-        "Location": {
-            "ID": location_id  # C: Special Events (Code 8)
-        },
         "Contact": {
-            "Code": "10"  # Customer contact for Special Events
+            "Code": "8"  # C: Special Events internal contact
         },
         "Shift": {
             "Code": "Production 01"  # Production shift
         },
         "OrderDate": event_date,
         "OrderItems": order_items_formatted,
-        "OrderNotes": f"Triple Seat Event #{event_id}: {event_name}",
+        "OrderNotes": f"TripleSeat Event {event_id} - {event_name} - {datetime.now().isoformat()}",
         "OrderStatus": "Open",
-        "OrderViewType": "SalesOrder"  # SalesOrder with customer contact
+        "OrderViewType": "SalesOrder",
+        "ExcludeFromForecasting": False,
+        "IsSpecial": False
     }
     
     logger.info(f"{req_id} [INJECTION] Creating Supply It order with {len(order_items)} items")
     
-    # Create order in Supply It
-    created_order = supplyit_client.create_order(order_data, correlation_id)
+    # Create order in Supply It (pass location_code for header, not in body)
+    created_order = supplyit_client.create_order(order_data, location_code=location_code, correlation_id=correlation_id)
     
     if not created_order:
         logger.error(f"{req_id} [INJECTION FAILED] Failed to create order in Supply It")
