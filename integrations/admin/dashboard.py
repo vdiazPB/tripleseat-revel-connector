@@ -265,28 +265,16 @@ def get_dashboard_html() -> str:
             border-radius: 50%;
         }
 
-        .platform-badge.tripleseat .platform-logo {
-            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        .platform-logo.tripleseat-logo {
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
         }
 
-        .platform-badge.revel .platform-logo {
-            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+        .platform-logo.revel-logo {
+            background: linear-gradient(135deg, #1e3a5f 0%, #0f2844 100%);
         }
 
-        .platform-badge.supplying .platform-logo {
-            background: linear-gradient(135deg, #059669 0%, #047857 100%);
-        }
-
-        .platform-badge.tripleseat svg {
-            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-        }
-
-        .platform-badge.revel svg {
-            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
-        }
-
-        .platform-badge.supplying svg {
-            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        .platform-logo.supplying-logo {
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
         }
 
         .platform-name {
@@ -642,10 +630,16 @@ def get_dashboard_html() -> str:
             <div class="header-content">
                 <div class="platform-flow">
                     <div class="platform-badge tripleseat">
-                        <div class="platform-logo">
+                        <div class="platform-logo tripleseat-logo">
                             <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="50" cy="50" r="48" fill="white" opacity="0.1"/>
-                                <text x="50" y="65" font-size="40" font-weight="bold" text-anchor="middle" fill="currentColor">TS</text>
+                                <!-- TripleSeat cyan sound wave -->
+                                <rect x="10" y="25" width="6" height="50" rx="3" fill="white"/>
+                                <rect x="22" y="15" width="6" height="70" rx="3" fill="white"/>
+                                <rect x="34" y="20" width="6" height="60" rx="3" fill="white"/>
+                                <rect x="46" y="15" width="6" height="70" rx="3" fill="white"/>
+                                <rect x="58" y="25" width="6" height="50" rx="3" fill="white"/>
+                                <rect x="70" y="20" width="6" height="60" rx="3" fill="white"/>
+                                <rect x="82" y="30" width="6" height="40" rx="3" fill="white"/>
                             </svg>
                         </div>
                         <span class="platform-name">TripleSeat</span>
@@ -654,12 +648,14 @@ def get_dashboard_html() -> str:
                     <div class="flow-connector">→</div>
                     
                     <div class="platform-badge revel">
-                        <div class="platform-logo">
+                        <div class="platform-logo revel-logo">
                             <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="50" cy="50" r="48" fill="white" opacity="0.1"/>
-                                <rect x="25" y="30" width="50" height="40" rx="4" stroke="currentColor" stroke-width="3"/>
-                                <line x1="35" y1="45" x2="65" y2="45" stroke="currentColor" stroke-width="2"/>
-                                <line x1="35" y1="55" x2="65" y2="55" stroke="currentColor" stroke-width="2"/>
+                                <!-- Revel mixer bars -->
+                                <rect x="15" y="30" width="8" height="40" rx="4" fill="white"/>
+                                <rect x="30" y="20" width="8" height="50" rx="4" fill="white"/>
+                                <rect x="45" y="25" width="8" height="45" rx="4" fill="white"/>
+                                <rect x="60" y="20" width="8" height="50" rx="4" fill="white"/>
+                                <rect x="75" y="30" width="8" height="40" rx="4" fill="white"/>
                             </svg>
                         </div>
                         <span class="platform-name">Revel POS</span>
@@ -668,13 +664,10 @@ def get_dashboard_html() -> str:
                     <div class="flow-connector">→</div>
                     
                     <div class="platform-badge supplying">
-                        <div class="platform-logo">
+                        <div class="platform-logo supplying-logo">
                             <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="50" cy="50" r="48" fill="white" opacity="0.1"/>
-                                <rect x="20" y="35" width="60" height="35" rx="3" stroke="currentColor" stroke-width="3"/>
-                                <path d="M30 35V28C30 24 32 22 36 22H64C68 22 70 24 70 28V35" stroke="currentColor" stroke-width="3" fill="none"/>
-                                <line x1="45" y1="45" x2="55" y2="45" stroke="currentColor" stroke-width="2"/>
-                                <line x1="45" y1="55" x2="55" y2="55" stroke="currentColor" stroke-width="2"/>
+                                <!-- SupplyIt S logo -->
+                                <path d="M 70 25 Q 80 25 80 35 Q 80 42 65 45 Q 85 48 85 55 Q 85 70 70 70 Q 55 70 55 60 L 65 60 Q 65 65 70 65 Q 75 65 75 60 Q 75 55 65 52 Q 45 48 45 40 Q 45 28 60 28 Q 70 28 72 35 L 62 35 Q 61 32 60 32 Q 55 32 55 37 Q 55 42 70 45" fill="white"/>
                             </svg>
                         </div>
                         <span class="platform-name">SupplyIt</span>
@@ -822,11 +815,17 @@ def get_dashboard_html() -> str:
         }
 
         async function toggleSetting(key) {
+            console.log('Toggle clicked for:', key);
             try {
-                const response = await fetch(`/api/settings/toggle/${key}`, {
+                const url = `/api/settings/toggle/${key}`;
+                console.log('Fetching:', url);
+                
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
+                
+                console.log('Response status:', response.status, response.statusText);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -837,7 +836,8 @@ def get_dashboard_html() -> str:
                 
                 if (result.success) {
                     showMessage(result.message || 'Setting updated successfully', 'success');
-                    await loadSettings();
+                    // Reload settings after a brief delay to ensure update
+                    setTimeout(() => loadSettings(), 500);
                 } else {
                     showMessage(result.detail || 'Failed to update setting', 'error');
                 }
