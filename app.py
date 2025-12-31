@@ -125,7 +125,7 @@ if test_location_override:
     logger.warning(f"TEST_LOCATION_OVERRIDE ENABLED – All orders routed to establishment {test_establishment_id}")
 
 @app.api_route("/", methods=["GET", "HEAD"])
-def root():
+def root(request: Request):
     """Root path - serves admin dashboard (GET) or health check (HEAD).
     
     GET: Returns HTML dashboard
