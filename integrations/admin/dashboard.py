@@ -158,406 +158,599 @@ async def trigger_sync(event_id: str = None, hours_back: int = 48):
 
 
 def get_dashboard_html() -> str:
-    """Generate admin dashboard HTML with editable settings."""
-    config = load_settings()
-    
-    html = """<!DOCTYPE html>
+    """Generate professional admin dashboard HTML with location override."""
+    return """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TripleSeat-Revel Connector Admin</title>
+    <title>Dashboard - TripleSeat Revel Connector</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Courier New', monospace;
-            background: #0f1419;
-            color: #e0e6ed;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #1e40af;
+            --secondary: #0f766e;
+            --accent: #059669;
+            --danger: #dc2626;
+            --warning: #f59e0b;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --border: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #1a2942 100%);
+            color: var(--text-primary);
             min-height: 100vh;
-            padding: 20px;
-        }
-        .container { max-width: 1400px; margin: 0 auto; }
-        header { 
-            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
-            border-left: 4px solid #00d4ff;
-            padding: 30px;
-            margin-bottom: 30px;
-            border-radius: 8px;
-            box-shadow: 0 8px 32px rgba(0, 212, 255, 0.1);
-        }
-        header h1 { 
-            color: #00d4ff;
-            font-size: 32px;
-            margin-bottom: 8px;
-            letter-spacing: 2px;
-        }
-        header p {
-            color: #a0aec0;
-            font-size: 13px;
-        }
-        .status-badge { 
-            display: inline-block;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 700;
-            margin-top: 12px;
-            background: #0d3f3f;
-            color: #48d1cc;
-            border: 1px solid #48d1cc;
-            letter-spacing: 1px;
-        }
-        .status-badge.online::before { content: "● "; color: #00ff00; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 20px; }
-        .card { 
-            background: #1a202c;
-            border: 1px solid #2d3748;
-            border-left: 3px solid #00d4ff;
             padding: 24px;
-            margin-bottom: 20px;
-            border-radius: 6px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            line-height: 1.6;
         }
-        .card h2 { 
-            color: #00d4ff;
-            font-size: 16px;
-            margin-bottom: 20px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid #2d3748;
-            letter-spacing: 1px;
-            text-transform: uppercase;
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
         }
-        .field { 
-            margin-bottom: 16px;
+
+        header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 12px;
-            padding: 8px;
-            background: rgba(0, 212, 255, 0.05);
-            border-radius: 4px;
+            margin-bottom: 32px;
+            padding: 0;
         }
-        .field-label { 
+
+        .header-content h1 {
+            font-size: 1.875rem;
             font-weight: 700;
-            color: #48d1cc;
-            min-width: 200px;
+            margin-bottom: 4px;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
-        .field-value { 
-            color: #cbd5e0;
-            font-family: 'Courier New', monospace;
+
+        .header-content p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
         }
-        .toggle-group {
+
+        .header-status {
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 16px;
-            padding: 12px;
-            background: rgba(0, 212, 255, 0.05);
-            border-radius: 4px;
+            padding: 12px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
         }
-        .toggle-group input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-            accent-color: #00d4ff;
+
+        .status-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
-        .toggle-group label {
-            margin: 0;
-            cursor: pointer;
-            color: #cbd5e0;
-            flex: 1;
-        }
-        .button-group { 
-            display: flex;
-            gap: 10px;
-            margin-top: 16px;
-            flex-wrap: wrap;
-        }
-        button { 
-            padding: 10px 16px;
-            border: 1px solid #2d3748;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-family: 'Courier New', monospace;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .btn-primary { 
-            background: #00d4ff;
-            color: #0f1419;
-            border-color: #00d4ff;
-        }
-        .btn-primary:hover { 
-            background: #00ffff;
-            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
-        }
-        .btn-success { 
-            background: #48d1cc;
-            color: #0f1419;
-            border-color: #48d1cc;
-        }
-        .btn-success:hover { 
-            background: #7fffd4;
-            box-shadow: 0 0 20px rgba(72, 209, 204, 0.5);
-        }
-        .btn-warning {
-            background: #ffa500;
-            color: #0f1419;
-            border-color: #ffa500;
-        }
-        .btn-warning:hover {
-            background: #ffb347;
-            box-shadow: 0 0 20px rgba(255, 165, 0, 0.5);
-        }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        label { 
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 700;
-            color: #48d1cc;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        input[type="text"], 
-        input[type="number"],
-        select { 
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #2d3748;
-            border-radius: 4px;
-            margin-bottom: 12px;
-            font-size: 12px;
-            background: #0a0e17;
-            color: #00d4ff;
-            font-family: 'Courier New', monospace;
-        }
-        input[type="text"]:focus,
-        input[type="number"]:focus,
-        select:focus {
-            outline: none;
-            border-color: #00d4ff;
-            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
-        }
-        .result { 
-            background: #0a0e17;
-            padding: 12px;
-            border-radius: 4px;
-            margin-top: 12px;
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            max-height: 400px;
-            overflow-y: auto;
-            color: #00d4ff;
-            border: 1px solid #2d3748;
-        }
-        footer { 
-            text-align: center;
-            color: #718096;
-            margin-top: 40px;
-            font-size: 11px;
-        }
-        .success-msg { 
-            background: rgba(72, 209, 204, 0.1);
-            color: #48d1cc;
-            padding: 12px;
-            border-radius: 4px;
-            margin-top: 12px;
-            border: 1px solid #48d1cc;
-        }
-        .error-msg { 
-            background: rgba(255, 69, 0, 0.1);
-            color: #ff4500;
-            padding: 12px;
-            border-radius: 4px;
-            margin-top: 12px;
-            border: 1px solid #ff4500;
-        }
-        .loading { animation: pulse 1.5s infinite; }
-        @keyframes pulse { 
+
+        @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--secondary);
+            box-shadow: 0 4px 20px rgba(15, 118, 110, 0.1);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .card-icon {
+            font-size: 1.5rem;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(5, 150, 105, 0.1);
+            border-radius: 8px;
+        }
+
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .card-description {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .setting-row:hover {
+            border-color: var(--border);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .setting-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .setting-label {
+            flex: 1;
+        }
+
+        .setting-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .setting-help {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 52px;
+            height: 28px;
+            background: var(--border);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .toggle-switch.active {
+            background: var(--accent);
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-switch.active::after {
+            left: 26px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        input[type="number"] {
+            flex: 1;
+            padding: 10px 12px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+        }
+
+        button {
+            padding: 10px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            background: #1e3a8a;
+            box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-lg {
+            padding: 12px 24px;
+            font-size: 1rem;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            display: none;
+            font-size: 0.95rem;
+            border: 1px solid;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.success {
+            background: rgba(5, 150, 105, 0.1);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .message.error {
+            background: rgba(220, 38, 38, 0.1);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        footer {
+            text-align: center;
+            padding-top: 32px;
+            margin-top: 32px;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .stats {
+                grid-template-columns: 1fr;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>█ CONNECTOR ADMIN █</h1>
-            <p>TripleSeat-Revel Integration Control Panel</p>
-            <div class="status-badge online">ONLINE</div>
+            <div class="header-content">
+                <h1>TripleSeat Revel Connector</h1>
+                <p>Supply It Order Integration Dashboard</p>
+            </div>
+            <div class="header-status">
+                <span class="status-dot"></span>
+                <span>Operational</span>
+            </div>
         </header>
+
+        <div id="message" class="message"></div>
 
         <div class="grid">
             <div class="card">
-                <h2>⚡ System Status</h2>
-                <div class="field">
-                    <span class="field-label">Status:</span>
-                    <span class="field-value" id="connStatus">[ LOADING ]</span>
+                <div class="card-header">
+                    <div class="card-icon">⚙️</div>
+                    <div>
+                        <div class="card-title">Operation Modes</div>
+                        <div class="card-description">Control system behavior and testing modes</div>
+                    </div>
                 </div>
-                <div class="field">
-                    <span class="field-label">Mode:</span>
-                    <span class="field-value" id="connMode">[ LOADING ]</span>
+
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <div class="setting-name">JERA Testing Mode</div>
+                        <div class="setting-help">Simulate orders without SupplyIt API calls</div>
+                    </div>
+                    <button class="toggle-switch" id="jeraToggle" onclick="toggleSetting('jera.testing_mode')"></button>
                 </div>
-                <div class="field">
-                    <span class="field-label">Timezone:</span>
-                    <span class="field-value" id="connTimezone">[ LOADING ]</span>
+
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <div class="setting-name">Global Dry-Run</div>
+                        <div class="setting-help">Test all operations without creating orders</div>
+                    </div>
+                    <button class="toggle-switch" id="dryRunToggle" onclick="toggleSetting('dry_run.enabled')"></button>
                 </div>
-                <div class="field">
-                    <span class="field-label">Config:</span>
-                    <span class="field-value" id="settingsFile">[ CHECK ]</span>
+
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <div class="setting-name">Enable Connector</div>
+                        <div class="setting-help">Enable or disable all injections globally</div>
+                    </div>
+                    <button class="toggle-switch" id="connectorToggle" onclick="toggleSetting('enable_connector.enabled')"></button>
                 </div>
-                <button class="btn-primary" onclick="refreshStatus()">↻ REFRESH</button>
             </div>
 
             <div class="card">
-                <h2>⚙ Operation Mode</h2>
-                <div class="toggle-group">
-                    <input type="checkbox" id="jeraTestingMode">
-                    <label for="jeraTestingMode">JERA Testing Mode (Dry-Run)</label>
+                <div class="card-header">
+                    <div class="card-icon">📍</div>
+                    <div>
+                        <div class="card-title">Location Override</div>
+                        <div class="card-description">Test with specific establishments</div>
+                    </div>
                 </div>
-                <div class="toggle-group">
-                    <input type="checkbox" id="dryRunMode">
-                    <label for="dryRunMode">Global Dry-Run</label>
+
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <div class="setting-name">Enable Override</div>
+                        <div class="setting-help">Force all orders to specific establishment</div>
+                    </div>
+                    <button class="toggle-switch" id="locationOverrideToggle" onclick="toggleSetting('location_override.enabled')"></button>
                 </div>
-                <div class="toggle-group">
-                    <input type="checkbox" id="enableConnector">
-                    <label for="enableConnector">Enable Connector</label>
+
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <div class="setting-name">Establishment ID</div>
+                        <div class="setting-help">Target establishment when override enabled</div>
+                    </div>
                 </div>
-                <button class="btn-success" onclick="saveOperationMode()">💾 SAVE</button>
-                <div id="opModeMsg"></div>
+
+                <div class="input-group">
+                    <input type="number" id="establishmentIdInput" min="1" placeholder="Enter establishment ID">
+                    <button onclick="updateEstablishmentId()">Update</button>
+                </div>
             </div>
         </div>
 
-        <div class="card">
-            <h2>🔧 Manual Sync Control</h2>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div class="card full-width">
+            <div class="card-header">
+                <div class="card-icon">🔧</div>
                 <div>
-                    <label>Event ID:</label>
-                    <input type="text" id="eventId" placeholder="Leave blank for bulk sync">
-                    <label>Lookback Hours:</label>
-                    <input type="number" id="manualLookback" min="1" max="720" value="48">
-                    <button class="btn-primary" onclick="triggerSync()">▶ TRIGGER SYNC</button>
+                    <div class="card-title">System Tools</div>
+                    <div class="card-description">Manual operations and maintenance</div>
                 </div>
-                <div id="resultDiv" style="display: none;">
-                    <h3 style="color: #00d4ff; margin-bottom: 12px;">[ RESULT ]</h3>
-                    <div class="result" id="syncResult"></div>
+            </div>
+
+            <button class="btn-lg" onclick="triggerSync()" id="syncBtn">
+                <span>🔄</span> Trigger Manual Sync
+            </button>
+
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-value" id="modeStatus">-</div>
+                    <div class="stat-label">Mode</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="connectorStatus">-</div>
+                    <div class="stat-label">Connector</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="lastSyncStatus">-</div>
+                    <div class="stat-label">Last Update</div>
                 </div>
             </div>
         </div>
 
         <footer>
-            <p>TripleSeat-Revel Connector | Settings Persisted to config/settings.json</p>
+            <p>Last sync: <span id="lastUpdate">Loading...</span></p>
+            <p style="margin-top: 8px; opacity: 0.6;">v1.0 • Supply It Integration Service</p>
         </footer>
     </div>
 
     <script>
-        window.addEventListener("load", function() {
-            refreshStatus();
-            loadOperationMode();
-        });
-        
-        function refreshStatus() {
-            fetch("/admin/api/test")
-                .then(r => r.json())
-                .then(data => fetch("/admin/api/status"))
-                .then(r => r.json())
-                .then(data => {
-                    var status = data.connector.enabled ? "✓ ENABLED" : "✗ DISABLED";
-                    var mode = data.connector.mode === "dry_run" ? "🧪 DRY-RUN" : "🚀 PRODUCTION";
-                    document.getElementById("connStatus").textContent = status;
-                    document.getElementById("connMode").textContent = mode;
-                    document.getElementById("connTimezone").textContent = data.connector.timezone;
-                    document.getElementById("settingsFile").textContent = "✓ config/settings.json";
-                })
-                .catch(e => {
-                    document.getElementById("connStatus").textContent = "✗ ERROR";
-                });
-        }
-        
-        function loadOperationMode() {
-            fetch("/api/settings/")
-                .then(r => r.json())
-                .then(data => {
-                    var settings = data.settings;
-                    document.getElementById("jeraTestingMode").checked = settings.jera.testing_mode;
-                    document.getElementById("dryRunMode").checked = settings.dry_run.enabled;
-                    document.getElementById("enableConnector").checked = settings.enable_connector.enabled;
-                })
-                .catch(e => console.error("Failed to load settings:", e));
-        }
-        
-        function saveOperationMode() {
-            var btn = event.target;
-            btn.disabled = true;
-            btn.textContent = "💾 SAVING...";
-            
-            var updates = [
-                fetch("/api/settings/jera.testing_mode", { 
-                    method: "POST", 
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(document.getElementById("jeraTestingMode").checked)
-                }),
-                fetch("/api/settings/dry_run.enabled", { 
-                    method: "POST", 
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(document.getElementById("dryRunMode").checked)
-                }),
-                fetch("/api/settings/enable_connector.enabled", { 
-                    method: "POST", 
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(document.getElementById("enableConnector").checked)
-                })
-            ];
-            
-            Promise.all(updates)
-                .then(() => {
-                    var msg = document.getElementById("opModeMsg");
-                    msg.innerHTML = "<div class='success-msg'>✓ Settings saved to config/settings.json</div>";
-                })
-                .catch(e => {
-                    var msg = document.getElementById("opModeMsg");
-                    msg.innerHTML = "<div class='error-msg'>✗ Error: " + e + "</div>";
-                })
-                .finally(() => {
-                    btn.disabled = false;
-                    btn.textContent = "💾 SAVE";
-                });
-        }
-        
-        function triggerSync() {
-            var eventId = document.getElementById("eventId").value;
-            var lookback = document.getElementById("manualLookback").value;
-            var url = "/admin/api/sync/trigger?";
-            
-            if (eventId) {
-                url += "event_id=" + encodeURIComponent(eventId);
-            } else {
-                url += "hours_back=" + lookback;
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings/');
+                const settings = await response.json();
+
+                const jeraMode = settings.jera?.testing_mode || false;
+                const dryRun = settings.dry_run?.enabled || false;
+                const connectorEnabled = settings.enable_connector?.enabled || true;
+                const locationOverride = settings.location_override?.enabled || false;
+                const establishmentId = settings.location_override?.establishment_id || 4;
+
+                document.getElementById('jeraToggle').classList.toggle('active', jeraMode);
+                document.getElementById('dryRunToggle').classList.toggle('active', dryRun);
+                document.getElementById('connectorToggle').classList.toggle('active', connectorEnabled);
+                document.getElementById('locationOverrideToggle').classList.toggle('active', locationOverride);
+                document.getElementById('establishmentIdInput').value = establishmentId;
+
+                // Update status indicators
+                const modeText = jeraMode ? 'Testing' : (dryRun ? 'Dry-Run' : 'Production');
+                document.getElementById('modeStatus').textContent = modeText;
+                document.getElementById('connectorStatus').textContent = connectorEnabled ? 'Active' : 'Inactive';
+                document.getElementById('lastSyncStatus').textContent = new Date().toLocaleTimeString();
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
+            } catch (error) {
+                console.error('Error loading settings:', error);
+                showMessage('Error loading settings', 'error');
             }
-            
-            var btn = event.target;
-            btn.disabled = true;
-            btn.textContent = "⏳ SYNCING...";
-            
-            fetch(url, { method: "POST" })
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById("resultDiv").style.display = "block";
-                    document.getElementById("syncResult").textContent = JSON.stringify(data, null, 2);
-                })
-                .catch(e => {
-                    document.getElementById("resultDiv").style.display = "block";
-                    document.getElementById("syncResult").textContent = "ERROR: " + e;
-                })
-                .finally(() => {
-                    btn.disabled = false;
-                    btn.textContent = "▶ TRIGGER SYNC";
-                });
         }
+
+        async function toggleSetting(key) {
+            try {
+                const response = await fetch(`/api/settings/toggle/${key}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                showMessage(result.message || 'Setting updated successfully', 'success');
+                await loadSettings();
+            } catch (error) {
+                console.error('Error toggling setting:', error);
+                showMessage('Error updating setting', 'error');
+            }
+        }
+
+        async function updateEstablishmentId() {
+            try {
+                const id = parseInt(document.getElementById('establishmentIdInput').value);
+                if (!id || id < 1) {
+                    showMessage('Please enter a valid establishment ID', 'error');
+                    return;
+                }
+                const response = await fetch('/api/settings/location_override.establishment_id', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: id })
+                });
+                const result = await response.json();
+                showMessage(result.message || 'Establishment ID updated', 'success');
+                await loadSettings();
+            } catch (error) {
+                console.error('Error updating establishment ID:', error);
+                showMessage('Error updating establishment ID', 'error');
+            }
+        }
+
+        async function triggerSync() {
+            const button = document.getElementById('syncBtn');
+            button.disabled = true;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span class="loading"></span> Syncing...';
+
+            try {
+                const response = await fetch('/admin/api/sync/trigger', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                showMessage(result.message || 'Sync completed', 'success');
+                await loadSettings();
+            } catch (error) {
+                console.error('Error triggering sync:', error);
+                showMessage('Error triggering sync', 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+
+        function showMessage(text, type) {
+            const msgEl = document.getElementById('message');
+            msgEl.textContent = text;
+            msgEl.className = `message ${type}`;
+            msgEl.style.display = 'block';
+            setTimeout(() => {
+                msgEl.style.display = 'none';
+            }, 4000);
+        }
+
+        // Load settings on page load
+        loadSettings();
+
+        // Refresh settings every 5 seconds
+        setInterval(loadSettings, 5000);
     </script>
 </body>
 </html>"""

@@ -1,8 +1,9 @@
 from fastapi import FastAPI, Request, HTTPException, Query
+from fastapi.responses import HTMLResponse
 import logging
 from integrations.tripleseat.webhook_handler import handle_tripleseat_webhook
 from integrations.revel.api_client import RevelAPIClient
-from integrations.admin.dashboard import get_settings_endpoints
+from integrations.admin.dashboard import get_settings_endpoints, get_dashboard_html
 from integrations.admin.settings_routes import router as settings_router
 import os
 from dotenv import load_dotenv
@@ -125,12 +126,18 @@ if test_location_override:
 
 @app.api_route("/", methods=["GET", "HEAD"])
 def root():
-    """Root path - used for Render health checks and endpoint validation.
+    """Root path - serves admin dashboard (GET) or health check (HEAD).
     
-    Supports both GET and HEAD requests.
-    No authentication required.
-    No database or OAuth calls.
+    GET: Returns HTML dashboard
+    HEAD: Returns 200 OK for Render health checks
     """
+    if request.method == "HEAD":
+        return {"status": "ok"}
+    return HTMLResponse(get_dashboard_html())
+
+@app.get("/status")
+def status():
+    """API status endpoint (JSON)."""
     return {"status": "ok"}
 
 @app.get("/health")
