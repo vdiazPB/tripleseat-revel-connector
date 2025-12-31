@@ -443,6 +443,16 @@ def get_dashboard_html() -> str:
             border: none;
             padding: 0;
             margin: 0;
+            flex-shrink: 0;
+            z-index: 1;
+        }
+
+        .toggle-switch:hover {
+            opacity: 0.8;
+        }
+
+        .toggle-switch:active {
+            transform: scale(0.98);
         }
 
         .toggle-switch.active {
@@ -459,6 +469,7 @@ def get_dashboard_html() -> str:
             top: 2px;
             left: 2px;
             transition: all 0.3s ease;
+            pointer-events: none;
         }
 
         .toggle-switch.active::after {
@@ -698,7 +709,7 @@ def get_dashboard_html() -> str:
                         <div class="setting-name">JERA Testing Mode</div>
                         <div class="setting-help">Simulate orders without SupplyIt API calls</div>
                     </div>
-                    <button class="toggle-switch" id="jeraToggle" onclick="toggleSetting('jera.testing_mode')"></button>
+                    <button type="button" class="toggle-switch" id="jeraToggle" onclick="toggleSetting('jera.testing_mode'); return false;"></button>
                 </div>
 
                 <div class="setting-row">
@@ -706,7 +717,7 @@ def get_dashboard_html() -> str:
                         <div class="setting-name">Global Dry-Run</div>
                         <div class="setting-help">Test all operations without creating orders</div>
                     </div>
-                    <button class="toggle-switch" id="dryRunToggle" onclick="toggleSetting('dry_run.enabled')"></button>
+                    <button type="button" class="toggle-switch" id="dryRunToggle" onclick="toggleSetting('dry_run.enabled'); return false;"></button>
                 </div>
 
                 <div class="setting-row">
@@ -714,7 +725,7 @@ def get_dashboard_html() -> str:
                         <div class="setting-name">Enable Connector</div>
                         <div class="setting-help">Enable or disable all injections globally</div>
                     </div>
-                    <button class="toggle-switch" id="connectorToggle" onclick="toggleSetting('enable_connector.enabled')"></button>
+                    <button type="button" class="toggle-switch" id="connectorToggle" onclick="toggleSetting('enable_connector.enabled'); return false;"></button>
                 </div>
             </div>
 
@@ -732,7 +743,7 @@ def get_dashboard_html() -> str:
                         <div class="setting-name">Enable Override</div>
                         <div class="setting-help">Force all orders to specific establishment</div>
                     </div>
-                    <button class="toggle-switch" id="locationOverrideToggle" onclick="toggleSetting('location_override.enabled')"></button>
+                    <button type="button" class="toggle-switch" id="locationOverrideToggle" onclick="toggleSetting('location_override.enabled'); return false;"></button>
                 </div>
 
                 <div class="setting-row">
