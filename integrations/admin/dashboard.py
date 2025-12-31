@@ -651,7 +651,7 @@ def get_dashboard_html() -> str:
                     
                     <div class="platform-badge revel">
                         <div class="platform-logo revel-logo">
-                            <img src="/static/revel%20logo%202.jpg" alt="Revel POS" style="width: 100%; height: 100%; object-fit: contain;">
+                            <img src="/static/Revelpos.png" alt="Revel POS" style="width: 100%; height: 100%; object-fit: contain;">
                         </div>
                         <span class="platform-name">Revel POS</span>
                     </div>
@@ -660,7 +660,7 @@ def get_dashboard_html() -> str:
                     
                     <div class="platform-badge supplying">
                         <div class="platform-logo supplying-logo">
-                            <img src="/static/supplyit.png" alt="SupplyIt" style="width: 100%; height: 100%; object-fit: contain;">
+                            <img src="/static/supplyit.svg" alt="SupplyIt" style="width: 100%; height: 100%; object-fit: contain;">
                         </div>
                         <span class="platform-name">SupplyIt</span>
                     </div>
