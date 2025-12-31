@@ -61,6 +61,34 @@ async def startup_event():
             except Exception as e:
                 logger.error(f"[scheduled-{correlation_id}] Scheduled sync failed: {e}")
         
+        def scheduled_event_close_task():
+            """Background task: auto-close DEFINITE events for today."""
+            correlation_id = str(uuid.uuid4())[:8]
+            logger.info(f"[scheduled-{correlation_id}] Starting scheduled event close task")
+            
+            try:
+                from auto_close_events import get_events_for_today, close_event
+                
+                events = get_events_for_today()
+                closed_count = 0
+                failed_count = 0
+                
+                for event in events:
+                    event_id = event.get('id')
+                    event_name = event.get('name')
+                    event_status = event.get('status', 'UNKNOWN')
+                    
+                    if event_status == 'DEFINITE':
+                        if close_event(event_id):
+                            closed_count += 1
+                        else:
+                            failed_count += 1
+                
+                logger.info(f"[scheduled-{correlation_id}] Event closure completed - "
+                           f"Closed: {closed_count}, Failed: {failed_count}, Total: {len(events)}")
+            except Exception as e:
+                logger.error(f"[scheduled-{correlation_id}] Scheduled event close failed: {e}")
+        
         # Schedule task to run every 45 minutes
         scheduler.add_job(
             scheduled_sync_task,
@@ -71,8 +99,18 @@ async def startup_event():
             replace_existing=True
         )
         
+        # Schedule event close task to run every hour
+        scheduler.add_job(
+            scheduled_event_close_task,
+            'interval',
+            hours=1,
+            id='event_auto_close',
+            name='Event Auto-Close Hourly',
+            replace_existing=True
+        )
+        
         scheduler.start()
-        logger.info("APScheduler initialized - TripleSeat sync scheduled every 45 minutes")
+        logger.info("APScheduler initialized - TripleSeat sync every 45 min, Event auto-close every hour")
         
         # Store scheduler in app state for potential cleanup
         app.scheduler = scheduler
