@@ -1,29 +1,18 @@
 {
   "jera": {
-    "testing_mode": false,
-    "description": "JERA/Supply It testing mode - true for dry-run, false for production"
+    "testing_mode": false
   },
   "dry_run": {
-    "enabled": false,
-    "description": "Global dry-run mode - test all injections without creation"
+    "enabled": false
   },
   "enable_connector": {
-    "enabled": true,
-    "description": "Enable/disable all Supply It injections globally"
+    "enabled": true
   },
   "location_override": {
     "enabled": false,
-    "establishment_id": 4,
-    "description": "Override all orders to specific establishment for testing"
-  },
-  "test_mode": {
-    "location_override": false,
-    "establishment_id": 4,
-    "description": "Test mode settings - override location and establishment IDs"
+    "establishment_id": 4
   },
   "logging": {
-    "verbose": false,
-    "description": "Enable verbose logging for debugging"
-  },
-  "last_updated": "2025-12-30T00:00:00Z"
+    "verbose": false
+  }
 }

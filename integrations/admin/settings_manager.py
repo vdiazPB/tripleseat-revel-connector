@@ -61,10 +61,6 @@ class SettingsManager:
             else:
                 return default
         
-        # Handle nested 'enabled' key
-        if isinstance(value, dict) and 'enabled' in value:
-            return value['enabled']
-        
         return value if value is not None else default
     
     @staticmethod
@@ -80,12 +76,9 @@ class SettingsManager:
                 current[part] = {}
             current = current[part]
         
-        # Set the value
+        # Set the value at the final key
         final_key = parts[-1]
-        if isinstance(current.get(final_key), dict) and 'enabled' in current[final_key]:
-            current[final_key]['enabled'] = value
-        else:
-            current[final_key] = value
+        current[final_key] = value
         
         return SettingsManager.save(settings)
     
