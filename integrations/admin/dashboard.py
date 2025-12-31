@@ -709,7 +709,7 @@ def get_dashboard_html() -> str:
                         <div class="setting-name">JERA Testing Mode</div>
                         <div class="setting-help">Simulate orders without SupplyIt API calls</div>
                     </div>
-                    <button type="button" class="toggle-switch" id="jeraToggle" onclick="toggleSetting('jera.testing_mode'); return false;"></button>
+                    <button type="button" class="toggle-switch" id="jeraToggle"></button>
                 </div>
 
                 <div class="setting-row">
@@ -717,7 +717,7 @@ def get_dashboard_html() -> str:
                         <div class="setting-name">Global Dry-Run</div>
                         <div class="setting-help">Test all operations without creating orders</div>
                     </div>
-                    <button type="button" class="toggle-switch" id="dryRunToggle" onclick="toggleSetting('dry_run.enabled'); return false;"></button>
+                    <button type="button" class="toggle-switch" id="dryRunToggle"></button>
                 </div>
 
                 <div class="setting-row">
@@ -725,7 +725,7 @@ def get_dashboard_html() -> str:
                         <div class="setting-name">Enable Connector</div>
                         <div class="setting-help">Enable or disable all injections globally</div>
                     </div>
-                    <button type="button" class="toggle-switch" id="connectorToggle" onclick="toggleSetting('enable_connector.enabled'); return false;"></button>
+                    <button type="button" class="toggle-switch" id="connectorToggle"></button>
                 </div>
             </div>
 
@@ -743,7 +743,7 @@ def get_dashboard_html() -> str:
                         <div class="setting-name">Enable Override</div>
                         <div class="setting-help">Force all orders to specific establishment</div>
                     </div>
-                    <button type="button" class="toggle-switch" id="locationOverrideToggle" onclick="toggleSetting('location_override.enabled'); return false;"></button>
+                    <button type="button" class="toggle-switch" id="locationOverrideToggle"></button>
                 </div>
 
                 <div class="setting-row">
@@ -798,8 +798,18 @@ def get_dashboard_html() -> str:
     <script>
         async function loadSettings() {
             try {
+                console.log('Loading settings from /api/settings/');
                 const response = await fetch('/api/settings/');
-                const settings = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Settings response:', data);
+                
+                const settings = data.settings || data;
+                console.log('Extracted settings:', settings);
 
                 const jeraMode = settings.jera?.testing_mode || false;
                 const dryRun = settings.dry_run?.enabled || false;
@@ -807,11 +817,30 @@ def get_dashboard_html() -> str:
                 const locationOverride = settings.location_override?.enabled || false;
                 const establishmentId = settings.location_override?.establishment_id || 4;
 
-                document.getElementById('jeraToggle').classList.toggle('active', jeraMode);
-                document.getElementById('dryRunToggle').classList.toggle('active', dryRun);
-                document.getElementById('connectorToggle').classList.toggle('active', connectorEnabled);
-                document.getElementById('locationOverrideToggle').classList.toggle('active', locationOverride);
-                document.getElementById('establishmentIdInput').value = establishmentId;
+                console.log('Toggle states:', { jeraMode, dryRun, connectorEnabled, locationOverride });
+
+                // Update toggle buttons
+                const jeraBtn = document.getElementById('jeraToggle');
+                const dryBtn = document.getElementById('dryRunToggle');
+                const connBtn = document.getElementById('connectorToggle');
+                const locBtn = document.getElementById('locationOverrideToggle');
+                
+                if (!jeraBtn || !dryBtn || !connBtn || !locBtn) {
+                    console.error('Some toggle buttons not found in DOM!');
+                    return;
+                }
+
+                jeraBtn.classList.toggle('active', jeraMode);
+                dryBtn.classList.toggle('active', dryRun);
+                connBtn.classList.toggle('active', connectorEnabled);
+                locBtn.classList.toggle('active', locationOverride);
+                
+                console.log('Toggle buttons updated');
+                
+                const establishmentInput = document.getElementById('establishmentIdInput');
+                if (establishmentInput) {
+                    establishmentInput.value = establishmentId;
+                }
 
                 // Update status indicators
                 const modeText = jeraMode ? 'Testing' : (dryRun ? 'Dry-Run' : 'Production');
@@ -929,11 +958,95 @@ def get_dashboard_html() -> str:
             }, 4000);
         }
 
-        // Load settings on page load
-        loadSettings();
-
-        // Refresh settings every 5 seconds
-        setInterval(loadSettings, 5000);
+        // Setup toggle button event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                console.log('🟢 DOMContentLoaded fired');
+                console.log('DOM elements:', {
+                    jeraToggle: !!document.getElementById('jeraToggle'),
+                    dryRunToggle: !!document.getElementById('dryRunToggle'),
+                    connectorToggle: !!document.getElementById('connectorToggle'),
+                    locationOverrideToggle: !!document.getElementById('locationOverrideToggle')
+                });
+                
+                // Load settings first
+                console.log('🔵 Calling loadSettings()');
+                loadSettings();
+                
+                // Add click listeners to all toggle buttons
+                const toggleButtons = document.querySelectorAll('.toggle-switch');
+                console.log('🔵 Found', toggleButtons.length, 'toggle buttons');
+                
+                // JERA Toggle
+                const jeraToggle = document.getElementById('jeraToggle');
+                if (jeraToggle) {
+                    console.log('✅ Attaching listener to JERA toggle');
+                    jeraToggle.addEventListener('click', async function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('🟡 JERA toggle clicked - calling toggleSetting()');
+                        await toggleSetting('jera.testing_mode');
+                        return false;
+                    });
+                } else {
+                    console.error('❌ JERA toggle button not found!');
+                }
+                
+                // Dry-Run Toggle
+                const dryRunToggle = document.getElementById('dryRunToggle');
+                if (dryRunToggle) {
+                    console.log('✅ Attaching listener to Dry-Run toggle');
+                    dryRunToggle.addEventListener('click', async function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('🟡 Dry-Run toggle clicked - calling toggleSetting()');
+                        await toggleSetting('dry_run.enabled');
+                        return false;
+                    });
+                } else {
+                    console.error('❌ Dry-Run toggle button not found!');
+                }
+                
+                // Connector Toggle
+                const connectorToggle = document.getElementById('connectorToggle');
+                if (connectorToggle) {
+                    console.log('✅ Attaching listener to Connector toggle');
+                    connectorToggle.addEventListener('click', async function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('🟡 Connector toggle clicked - calling toggleSetting()');
+                        await toggleSetting('enable_connector.enabled');
+                        return false;
+                    });
+                } else {
+                    console.error('❌ Connector toggle button not found!');
+                }
+                
+                // Location Override Toggle
+                const locationToggle = document.getElementById('locationOverrideToggle');
+                if (locationToggle) {
+                    console.log('✅ Attaching listener to Location Override toggle');
+                    locationToggle.addEventListener('click', async function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('🟡 Location Override toggle clicked - calling toggleSetting()');
+                        await toggleSetting('location_override.enabled');
+                        return false;
+                    });
+                } else {
+                    console.error('❌ Location Override toggle button not found!');
+                }
+                
+                // Refresh settings every 5 seconds
+                console.log('✅ Starting 5-second refresh interval');
+                setInterval(loadSettings, 5000);
+                
+                console.log('🟢 All event listeners attached successfully!');
+            } catch (error) {
+                console.error('❌ ERROR during DOMContentLoaded setup:', error);
+                console.error('Stack trace:', error.stack);
+            }
+        });
     </script>
 </body>
 </html>"""

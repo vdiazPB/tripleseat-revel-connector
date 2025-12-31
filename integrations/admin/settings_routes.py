@@ -1,8 +1,13 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body
+from pydantic import BaseModel
 from integrations.admin.settings_manager import get_all_settings, set_setting
 import logging
 
 logger = logging.getLogger(__name__)
+
+class SettingValue(BaseModel):
+    value: bool
+
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -35,9 +40,10 @@ async def get_setting(key: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{key}")
-async def update_setting(key: str, value: bool):
-    """Update a setting by key (e.g., POST /api/settings/jera.testing_mode with body: true)."""
+async def update_setting(key: str, setting: SettingValue):
+    """Update a setting by key (e.g., POST /api/settings/jera.testing_mode with body: {"value": true})."""
     try:
+        value = setting.value
         success = set_setting(key, value)
         
         if success:
