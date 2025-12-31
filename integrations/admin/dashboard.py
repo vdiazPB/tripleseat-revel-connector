@@ -210,11 +210,85 @@ def get_dashboard_html() -> str:
         .header-content h1 {
             font-size: 1.875rem;
             font-weight: 700;
-            margin-bottom: 4px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            color: var(--text-primary);
+        }
+
+        .platform-flow {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .platform-badge {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            min-width: 100px;
+        }
+
+        .platform-badge svg {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .platform-badge.tripleseat svg {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        }
+
+        .platform-badge.revel svg {
+            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+        }
+
+        .platform-badge.supplying svg {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        }
+
+        .platform-name {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-align: center;
+        }
+
+        .flow-connector {
+            font-size: 1.5rem;
+            color: var(--accent);
+            opacity: 0.7;
+            margin-bottom: 24px;
+        }
+
+        .logo-icon {
+            font-size: 2rem;
+            display: inline-block;
+        }
+
+        .platform-connector {
             background: linear-gradient(135deg, var(--accent) 0%, var(--secondary) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            font-weight: 700;
+        }
+
+        .connector-arrow {
+            color: var(--accent);
+            opacity: 0.6;
+            font-size: 1.25rem;
         }
 
         .header-content p {
@@ -535,8 +609,40 @@ def get_dashboard_html() -> str:
     <div class="container">
         <header>
             <div class="header-content">
-                <h1>TripleSeat Revel Connector</h1>
-                <p>Supply It Order Integration Dashboard</p>
+                <div class="platform-flow">
+                    <div class="platform-badge tripleseat">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"></path>
+                            <path d="M12 12l3-3M12 12l-3-3"></path>
+                        </svg>
+                        <span class="platform-name">TripleSeat</span>
+                    </div>
+                    
+                    <div class="flow-connector">→</div>
+                    
+                    <div class="platform-badge revel">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                            <path d="M9 11h6"></path>
+                            <path d="M9 15h6"></path>
+                            <circle cx="6" cy="6" r="1" fill="currentColor"></circle>
+                        </svg>
+                        <span class="platform-name">Revel</span>
+                    </div>
+                    
+                    <div class="flow-connector">→</div>
+                    
+                    <div class="platform-badge supplying">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 16V8c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2z"></path>
+                            <path d="M3 10h18"></path>
+                            <path d="M7 6v-1c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v1"></path>
+                            <path d="M17 6v-1c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v1"></path>
+                        </svg>
+                        <span class="platform-name">SupplyIt</span>
+                    </div>
+                </div>
+                <p>Seamless event order integration across platforms</p>
             </div>
             <div class="header-status">
                 <span class="status-dot"></span>
