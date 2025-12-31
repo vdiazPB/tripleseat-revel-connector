@@ -246,6 +246,37 @@ def get_dashboard_html() -> str:
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
+        .platform-logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .platform-logo svg {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            border-radius: 50%;
+        }
+
+        .platform-badge.tripleseat .platform-logo {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        }
+
+        .platform-badge.revel .platform-logo {
+            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+        }
+
+        .platform-badge.supplying .platform-logo {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        }
+
         .platform-badge.tripleseat svg {
             background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
         }
@@ -611,34 +642,41 @@ def get_dashboard_html() -> str:
             <div class="header-content">
                 <div class="platform-flow">
                     <div class="platform-badge tripleseat">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"></path>
-                            <path d="M12 12l3-3M12 12l-3-3"></path>
-                        </svg>
+                        <div class="platform-logo">
+                            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="50" cy="50" r="48" fill="white" opacity="0.1"/>
+                                <text x="50" y="65" font-size="40" font-weight="bold" text-anchor="middle" fill="currentColor">TS</text>
+                            </svg>
+                        </div>
                         <span class="platform-name">TripleSeat</span>
                     </div>
                     
                     <div class="flow-connector">→</div>
                     
                     <div class="platform-badge revel">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-                            <path d="M9 11h6"></path>
-                            <path d="M9 15h6"></path>
-                            <circle cx="6" cy="6" r="1" fill="currentColor"></circle>
-                        </svg>
-                        <span class="platform-name">Revel</span>
+                        <div class="platform-logo">
+                            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="50" cy="50" r="48" fill="white" opacity="0.1"/>
+                                <rect x="25" y="30" width="50" height="40" rx="4" stroke="currentColor" stroke-width="3"/>
+                                <line x1="35" y1="45" x2="65" y2="45" stroke="currentColor" stroke-width="2"/>
+                                <line x1="35" y1="55" x2="65" y2="55" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <span class="platform-name">Revel POS</span>
                     </div>
                     
                     <div class="flow-connector">→</div>
                     
                     <div class="platform-badge supplying">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 16V8c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2z"></path>
-                            <path d="M3 10h18"></path>
-                            <path d="M7 6v-1c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v1"></path>
-                            <path d="M17 6v-1c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v1"></path>
-                        </svg>
+                        <div class="platform-logo">
+                            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="50" cy="50" r="48" fill="white" opacity="0.1"/>
+                                <rect x="20" y="35" width="60" height="35" rx="3" stroke="currentColor" stroke-width="3"/>
+                                <path d="M30 35V28C30 24 32 22 36 22H64C68 22 70 24 70 28V35" stroke="currentColor" stroke-width="3" fill="none"/>
+                                <line x1="45" y1="45" x2="55" y2="45" stroke="currentColor" stroke-width="2"/>
+                                <line x1="45" y1="55" x2="55" y2="55" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </div>
                         <span class="platform-name">SupplyIt</span>
                     </div>
                 </div>
@@ -789,12 +827,23 @@ def get_dashboard_html() -> str:
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const result = await response.json();
-                showMessage(result.message || 'Setting updated successfully', 'success');
-                await loadSettings();
+                console.log('Toggle response:', result);
+                
+                if (result.success) {
+                    showMessage(result.message || 'Setting updated successfully', 'success');
+                    await loadSettings();
+                } else {
+                    showMessage(result.detail || 'Failed to update setting', 'error');
+                }
             } catch (error) {
                 console.error('Error toggling setting:', error);
-                showMessage('Error updating setting', 'error');
+                showMessage(`Error: ${error.message}`, 'error');
             }
         }
 
@@ -810,12 +859,23 @@ def get_dashboard_html() -> str:
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ value: id })
                 });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const result = await response.json();
-                showMessage(result.message || 'Establishment ID updated', 'success');
-                await loadSettings();
+                console.log('Update establishment response:', result);
+                
+                if (result.success) {
+                    showMessage(result.message || 'Establishment ID updated', 'success');
+                    await loadSettings();
+                } else {
+                    showMessage(result.detail || 'Failed to update establishment ID', 'error');
+                }
             } catch (error) {
                 console.error('Error updating establishment ID:', error);
-                showMessage('Error updating establishment ID', 'error');
+                showMessage(`Error: ${error.message}`, 'error');
             }
         }
 
@@ -830,12 +890,18 @@ def get_dashboard_html() -> str:
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const result = await response.json();
+                console.log('Sync response:', result);
                 showMessage(result.message || 'Sync completed', 'success');
                 await loadSettings();
             } catch (error) {
                 console.error('Error triggering sync:', error);
-                showMessage('Error triggering sync', 'error');
+                showMessage(`Error: ${error.message}`, 'error');
             } finally {
                 button.disabled = false;
                 button.innerHTML = originalText;
