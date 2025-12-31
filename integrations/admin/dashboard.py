@@ -642,7 +642,7 @@ def get_dashboard_html() -> str:
                 <div class="platform-flow">
                     <div class="platform-badge tripleseat">
                         <div class="platform-logo tripleseat-logo">
-                            <img src="/static/tripleseat-logo.svg" alt="TripleSeat" style="width: 100%; height: 100%; object-fit: contain;">
+                            <img src="/static/triple%20seat%20logo.png" alt="TripleSeat" style="width: 100%; height: 100%; object-fit: contain;">
                         </div>
                         <span class="platform-name">TripleSeat</span>
                     </div>
@@ -651,7 +651,7 @@ def get_dashboard_html() -> str:
                     
                     <div class="platform-badge revel">
                         <div class="platform-logo revel-logo">
-                            <img src="/static/revel-logo.svg" alt="Revel POS" style="width: 100%; height: 100%; object-fit: contain;">
+                            <img src="/static/revel%20logo%202.jpg" alt="Revel POS" style="width: 100%; height: 100%; object-fit: contain;">
                         </div>
                         <span class="platform-name">Revel POS</span>
                     </div>
@@ -660,7 +660,7 @@ def get_dashboard_html() -> str:
                     
                     <div class="platform-badge supplying">
                         <div class="platform-logo supplying-logo">
-                            <img src="/static/supplyit-logo.svg" alt="SupplyIt" style="width: 100%; height: 100%; object-fit: contain;">
+                            <img src="/static/supplyit.png" alt="SupplyIt" style="width: 100%; height: 100%; object-fit: contain;">
                         </div>
                         <span class="platform-name">SupplyIt</span>
                     </div>
