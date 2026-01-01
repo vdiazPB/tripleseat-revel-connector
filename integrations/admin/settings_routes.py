@@ -67,21 +67,30 @@ async def toggle_setting(key: str):
     """Toggle a boolean setting (flip true to false, false to true)."""
     try:
         from integrations.admin.settings_manager import get_setting
+        
         current = get_setting(key, False)
+        logger.info(f"🔵 Toggle endpoint: key={key}, current_value={current}, type={type(current)}")
+        
         new_value = not current
+        logger.info(f"🔵 Toggle endpoint: new_value={new_value}")
         
         success = set_setting(key, new_value)
         
         if success:
-            logger.info(f"✅ Setting toggled: {key} = {new_value}")
+            # Verify the value was actually saved
+            verified_value = get_setting(key, False)
+            logger.info(f"✅ Setting toggled: {key} - current: {current} -> new: {new_value}, verified: {verified_value}")
+            
             return {
                 "success": True,
                 "key": key,
                 "value": new_value,
+                "verified_value": verified_value,
                 "message": f"Setting '{key}' toggled to {new_value}"
             }
         else:
+            logger.error(f"🔴 Failed to save setting {key}")
             raise HTTPException(status_code=500, detail=f"Failed to toggle setting {key}")
     except Exception as e:
-        logger.error(f"Failed to toggle setting {key}: {e}")
+        logger.error(f"🔴 Failed to toggle setting {key}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

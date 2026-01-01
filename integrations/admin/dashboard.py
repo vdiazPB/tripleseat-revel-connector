@@ -779,7 +779,7 @@ def get_dashboard_html() -> str:
     <script>
         async function loadSettings() {
             try {
-                console.log('Loading settings from /api/settings/');
+                console.log('🔵 loadSettings() - Fetching /api/settings/');
                 const response = await fetch('/api/settings/');
                 
                 if (!response.ok) {
@@ -787,18 +787,25 @@ def get_dashboard_html() -> str:
                 }
                 
                 const data = await response.json();
-                console.log('Settings response:', data);
+                console.log('🔵 loadSettings() - API response:', data);
                 
                 const settings = data.settings || data;
-                console.log('Extracted settings:', settings);
+                console.log('🔵 loadSettings() - Extracted settings object:', settings);
 
                 const jeraMode = settings.jera?.testing_mode || false;
                 const dryRun = settings.dry_run?.enabled || false;
-                const connectorEnabled = settings.enable_connector?.enabled || true;
+                const connectorEnabled = settings.enable_connector?.enabled !== false; // Default to true if undefined
                 const locationOverride = settings.location_override?.enabled || false;
                 const establishmentId = settings.location_override?.establishment_id || 4;
 
-                console.log('Toggle states:', { jeraMode, dryRun, connectorEnabled, locationOverride });
+                console.log('🔵 loadSettings() - Parsed toggle states:', { 
+                    jeraMode, 
+                    dryRun, 
+                    connectorEnabled,
+                    locationOverride,
+                    'raw enable_connector': settings.enable_connector?.enabled,
+                    'raw location_override': settings.location_override?.enabled
+                });
 
                 // Update toggle buttons
                 const jeraBtn = document.getElementById('jeraToggle');
@@ -807,16 +814,40 @@ def get_dashboard_html() -> str:
                 const locBtn = document.getElementById('locationOverrideToggle');
                 
                 if (!jeraBtn || !dryBtn || !connBtn || !locBtn) {
-                    console.error('Some toggle buttons not found in DOM!');
+                    console.error('🔴 Some toggle buttons not found in DOM!');
+                    console.error('  jeraBtn:', !!jeraBtn, 'dryBtn:', !!dryBtn, 'connBtn:', !!connBtn, 'locBtn:', !!locBtn);
                     return;
                 }
 
-                jeraBtn.classList.toggle('active', jeraMode);
-                dryBtn.classList.toggle('active', dryRun);
-                connBtn.classList.toggle('active', connectorEnabled);
-                locBtn.classList.toggle('active', locationOverride);
+                console.log('🔵 loadSettings() - Updating toggle buttons:');
+                console.log('  jeraToggle.active =', jeraMode);
+                console.log('  dryRunToggle.active =', dryRun);
+                console.log('  connectorToggle.active =', connectorEnabled);
+                console.log('  locationOverrideToggle.active =', locationOverride);
                 
-                console.log('Toggle buttons updated');
+                // Update toggle classes AND inline styles as fallback
+                jeraBtn.classList.toggle('active', jeraMode);
+                jeraBtn.style.backgroundColor = jeraMode ? 'var(--accent)' : '';
+                jeraBtn.setAttribute('aria-pressed', jeraMode);
+                
+                dryBtn.classList.toggle('active', dryRun);
+                dryBtn.style.backgroundColor = dryRun ? 'var(--accent)' : '';
+                dryBtn.setAttribute('aria-pressed', dryRun);
+                
+                connBtn.classList.toggle('active', connectorEnabled);
+                connBtn.style.backgroundColor = connectorEnabled ? 'var(--accent)' : '';
+                connBtn.setAttribute('aria-pressed', connectorEnabled);
+                
+                locBtn.classList.toggle('active', locationOverride);
+                locBtn.style.backgroundColor = locationOverride ? 'var(--accent)' : '';
+                locBtn.setAttribute('aria-pressed', locationOverride);
+                
+                console.log('🔵 loadSettings() - Toggle button classes updated');
+                console.log('  jeraToggle actual class:', jeraBtn.className);
+                console.log('  jeraToggle backgroundColor:', jeraBtn.style.backgroundColor);
+                console.log('  dryRunToggle actual class:', dryBtn.className);
+                console.log('  connectorToggle actual class:', connBtn.className);
+                console.log('  locationOverrideToggle actual class:', locBtn.className);
                 
                 const establishmentInput = document.getElementById('establishmentIdInput');
                 if (establishmentInput) {
@@ -824,46 +855,87 @@ def get_dashboard_html() -> str:
                 }
 
                 // Update status indicators
-                const modeText = jeraMode ? 'Testing' : (dryRun ? 'Dry-Run' : 'Production');
-                document.getElementById('modeStatus').textContent = modeText;
-                document.getElementById('connectorStatus').textContent = connectorEnabled ? 'Active' : 'Inactive';
-                document.getElementById('lastSyncStatus').textContent = new Date().toLocaleTimeString();
-                document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
+                const modeStatus = document.getElementById('modeStatus');
+                const connectorStatus = document.getElementById('connectorStatus');
+                const lastSyncStatus = document.getElementById('lastSyncStatus');
+                const lastUpdate = document.getElementById('lastUpdate');
+                
+                if (modeStatus) {
+                    const modeText = jeraMode ? 'Testing' : (dryRun ? 'Dry-Run' : 'Production');
+                    modeStatus.textContent = modeText;
+                }
+                if (connectorStatus) {
+                    connectorStatus.textContent = connectorEnabled ? 'Active' : 'Inactive';
+                }
+                if (lastSyncStatus) {
+                    lastSyncStatus.textContent = new Date().toLocaleTimeString();
+                }
+                if (lastUpdate) {
+                    lastUpdate.textContent = new Date().toLocaleString();
+                }
+                
+                console.log('🔵 loadSettings() - Complete');
             } catch (error) {
-                console.error('Error loading settings:', error);
-                showMessage('Error loading settings', 'error');
+                console.error('🔴 Error loading settings:', error);
+                console.error('🔴 Error stack:', error.stack);
+                showMessage('Error loading settings: ' + error.message, 'error');
             }
         }
 
         async function toggleSetting(key) {
-            console.log('Toggle clicked for:', key);
+            console.log('🔵 toggleSetting() called with key:', key);
             try {
                 const url = `/api/settings/toggle/${key}`;
-                console.log('Fetching:', url);
+                console.log('🔵 Fetching URL:', url);
                 
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
                 
-                console.log('Response status:', response.status, response.statusText);
+                console.log('🔵 Response status:', response.status, response.statusText);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
                 const result = await response.json();
-                console.log('Toggle response:', result);
+                console.log('🔵 Toggle API response:', result);
+                console.log('🔵 New value from API:', result.value);
                 
                 if (result.success) {
                     showMessage(result.message || 'Setting updated successfully', 'success');
+                    console.log('🔵 Success! New value is:', result.value);
+                    
+                    // Update UI immediately before reload
+                    const toggleMap = {
+                        'jera.testing_mode': 'jeraToggle',
+                        'dry_run.enabled': 'dryRunToggle',
+                        'enable_connector.enabled': 'connectorToggle',
+                        'location_override.enabled': 'locationOverrideToggle'
+                    };
+                    
+                    const toggleId = toggleMap[key];
+                    if (toggleId) {
+                        const btn = document.getElementById(toggleId);
+                        if (btn) {
+                            console.log('🔵 Updating toggle UI immediately:', toggleId);
+                            btn.classList.toggle('active', result.value);
+                            btn.style.backgroundColor = result.value ? 'var(--accent)' : '';
+                            btn.setAttribute('aria-pressed', result.value);
+                            console.log('🔵 Toggle now has active class:', btn.classList.contains('active'));
+                            console.log('🔵 Toggle backgroundColor:', btn.style.backgroundColor);
+                        }
+                    }
+                    
                     // Reload settings after a brief delay to ensure update
+                    console.log('🔵 Will reload settings in 500ms');
                     setTimeout(() => loadSettings(), 500);
                 } else {
                     showMessage(result.detail || 'Failed to update setting', 'error');
                 }
             } catch (error) {
-                console.error('Error toggling setting:', error);
+                console.error('🔴 Error toggling setting:', error);
                 showMessage(`Error: ${error.message}`, 'error');
             }
         }

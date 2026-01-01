@@ -38,14 +38,25 @@ class SettingsManager:
             # Add timestamp
             settings['last_updated'] = datetime.utcnow().isoformat() + 'Z'
             
+            logger.info(f"🔵 Saving settings to {SETTINGS_FILE}")
+            logger.info(f"🔵 Settings before save: {json.dumps(settings, indent=2)}")
+            
             # Write file
             with open(SETTINGS_FILE, 'w') as f:
                 json.dump(settings, f, indent=2)
             
-            logger.info(f"✅ Settings saved to {SETTINGS_FILE}")
-            return True
+            # Verify file was written
+            if SETTINGS_FILE.exists():
+                with open(SETTINGS_FILE, 'r') as f:
+                    verified = json.load(f)
+                logger.info(f"✅ Settings file saved and verified at {SETTINGS_FILE}")
+                logger.info(f"✅ Verified content: {json.dumps(verified, indent=2)}")
+                return True
+            else:
+                logger.error(f"🔴 Settings file not found after save!")
+                return False
         except Exception as e:
-            logger.error(f"Failed to save settings: {e}")
+            logger.error(f"🔴 Failed to save settings: {e}", exc_info=True)
             return False
     
     @staticmethod
@@ -66,7 +77,11 @@ class SettingsManager:
     @staticmethod
     def set(key: str, value) -> bool:
         """Set a specific setting value."""
+        logger.info(f"🔵 SettingsManager.set() called: key={key}, value={value}, type={type(value)}")
+        
         settings = SettingsManager.load()
+        logger.info(f"🔵 Loaded settings: {json.dumps(settings, indent=2)}")
+        
         parts = key.split('.')
         
         # Navigate to the parent key
@@ -78,9 +93,14 @@ class SettingsManager:
         
         # Set the value at the final key
         final_key = parts[-1]
+        logger.info(f"🔵 Setting {key}: {parts[:-1]} -> {final_key} = {value}")
         current[final_key] = value
         
-        return SettingsManager.save(settings)
+        logger.info(f"🔵 Settings after modification: {json.dumps(settings, indent=2)}")
+        
+        result = SettingsManager.save(settings)
+        logger.info(f"🔵 SettingsManager.set() result: {result}")
+        return result
     
     @staticmethod
     def _get_defaults() -> dict:
