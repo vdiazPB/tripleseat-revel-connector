@@ -668,8 +668,8 @@ def get_dashboard_html() -> str:
                 <p>Seamless event order integration across platforms</p>
             </div>
             <div class="header-status">
-                <span class="status-dot"></span>
-                <span>Operational</span>
+                <span class="status-dot" id="headerStatusDot"></span>
+                <span id="headerStatusText">Operational</span>
             </div>
         </header>
 
@@ -859,6 +859,8 @@ def get_dashboard_html() -> str:
                 const connectorStatus = document.getElementById('connectorStatus');
                 const lastSyncStatus = document.getElementById('lastSyncStatus');
                 const lastUpdate = document.getElementById('lastUpdate');
+                const headerStatusDot = document.getElementById('headerStatusDot');
+                const headerStatusText = document.getElementById('headerStatusText');
                 
                 if (modeStatus) {
                     const modeText = jeraMode ? 'Testing' : (dryRun ? 'Dry-Run' : 'Production');
@@ -872,6 +874,19 @@ def get_dashboard_html() -> str:
                 }
                 if (lastUpdate) {
                     lastUpdate.textContent = new Date().toLocaleString();
+                }
+                
+                // Update header status based on connector state
+                if (headerStatusDot && headerStatusText) {
+                    if (connectorEnabled) {
+                        headerStatusDot.style.backgroundColor = '#10b981';
+                        headerStatusText.textContent = 'Operational';
+                        console.log('🔵 Header status: Operational (connector enabled)');
+                    } else {
+                        headerStatusDot.style.backgroundColor = '#ef4444';
+                        headerStatusText.textContent = 'Disabled';
+                        console.log('🔵 Header status: Disabled (connector disabled)');
+                    }
                 }
                 
                 console.log('🔵 loadSettings() - Complete');
