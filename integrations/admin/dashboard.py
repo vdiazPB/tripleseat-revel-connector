@@ -901,7 +901,14 @@ def get_dashboard_html() -> str:
                 
                 const result = await response.json();
                 console.log('🔵 Toggle API response:', result);
+                console.log('🔵 Response.success:', result.success);
                 console.log('🔵 New value from API:', result.value);
+                
+                if (!result.success) {
+                    console.error('🔴 API returned success=false:', result);
+                    showMessage(result.error || result.detail || 'Failed to update setting', 'error');
+                    return;
+                }
                 
                 if (result.success) {
                     showMessage(result.message || 'Setting updated successfully', 'success');
@@ -920,12 +927,17 @@ def get_dashboard_html() -> str:
                         const btn = document.getElementById(toggleId);
                         if (btn) {
                             console.log('🔵 Updating toggle UI immediately:', toggleId);
+                            console.log('🔵 Setting active class to:', result.value);
                             btn.classList.toggle('active', result.value);
                             btn.style.backgroundColor = result.value ? 'var(--accent)' : '';
                             btn.setAttribute('aria-pressed', result.value);
                             console.log('🔵 Toggle now has active class:', btn.classList.contains('active'));
                             console.log('🔵 Toggle backgroundColor:', btn.style.backgroundColor);
+                        } else {
+                            console.error('🔴 Toggle button not found:', toggleId);
                         }
+                    } else {
+                        console.warn('🟡 Toggle ID not found in map for key:', key);
                     }
                     
                     // Reload settings after a brief delay to ensure update

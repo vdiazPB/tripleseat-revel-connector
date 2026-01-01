@@ -13,19 +13,30 @@ def _get_settings_file_path():
     if os.getenv('SETTINGS_FILE'):
         return Path(os.getenv('SETTINGS_FILE'))
     
-    # Try project config directory first (local development)
+    # Try Render's persistent storage first (/mnt/data)
+    if os.getenv('RENDER') or os.path.exists('/mnt/data'):
+        render_config = Path('/mnt/data') / 'settings.json'
+        try:
+            Path('/mnt/data').mkdir(parents=True, exist_ok=True)
+            if os.access(Path('/mnt/data'), os.W_OK):
+                logger.info(f"Using Render persistent storage: {render_config}")
+                return render_config
+        except Exception as e:
+            logger.warning(f"Could not use /mnt/data: {e}")
+    
+    # Try project config directory next (local development)
     project_config = Path(__file__).parent.parent.parent / 'config' / 'settings.json'
-    if project_config.parent.exists() and os.access(project_config.parent, os.W_OK):
-        return project_config
+    try:
+        if project_config.parent.exists() and os.access(project_config.parent, os.W_OK):
+            logger.info(f"Using local config directory: {project_config}")
+            return project_config
+    except Exception as e:
+        logger.warning(f"Could not use project config: {e}")
     
-    # Fallback to /tmp for Render or other restricted environments
-    if os.getenv('RENDER') or os.getenv('ENV') == 'production':
-        tmp_config = Path('/tmp') / 'settings.json'
-        logger.info(f"Using fallback settings path for production: {tmp_config}")
-        return tmp_config
-    
-    # Final fallback to project config
-    return project_config
+    # Fallback to /tmp (last resort - not persistent)
+    tmp_config = Path('/tmp') / 'settings.json'
+    logger.warning(f"Using /tmp as fallback (not persistent): {tmp_config}")
+    return tmp_config
 
 SETTINGS_FILE = _get_settings_file_path()
 
@@ -42,9 +53,12 @@ class SettingsManager:
                 logger.info(f"✅ Settings loaded from {SETTINGS_FILE}")
                 return settings
             else:
-                logger.warning(f"Settings file not found at {SETTINGS_FILE}, using defaults")
+                logger.warning(f"Settings file not found at {SETTINGS_FILE}, creating defaults")
                 logger.info(f"Settings file path: {SETTINGS_FILE} (parent exists: {SETTINGS_FILE.parent.exists()})")
-                return SettingsManager._get_defaults()
+                # Create default settings file
+                defaults = SettingsManager._get_defaults()
+                SettingsManager.save(defaults)
+                return defaults
         except Exception as e:
             logger.error(f"Failed to load settings from {SETTINGS_FILE}: {e}")
             return SettingsManager._get_defaults()

@@ -30,6 +30,7 @@ async def get_setting(key: str):
     try:
         from integrations.admin.settings_manager import get_setting
         value = get_setting(key)
+        logger.debug(f"GET setting: {key} = {value} (type: {type(value).__name__})")
         return {
             "success": True,
             "key": key,
@@ -71,8 +72,13 @@ async def toggle_setting(key: str):
         current = get_setting(key, False)
         logger.info(f"🔵 Toggle endpoint: key={key}, current_value={current}, type={type(current)}")
         
+        # Ensure we're working with a boolean
+        if not isinstance(current, bool):
+            logger.warning(f"🟡 Current value is not boolean, converting: {current} (type: {type(current)})")
+            current = bool(current)
+        
         new_value = not current
-        logger.info(f"🔵 Toggle endpoint: new_value={new_value}")
+        logger.info(f"🔵 Toggle endpoint: new_value={new_value}, will_save={key}={new_value}")
         
         success = set_setting(key, new_value)
         
@@ -80,6 +86,18 @@ async def toggle_setting(key: str):
             # Verify the value was actually saved
             verified_value = get_setting(key, False)
             logger.info(f"✅ Setting toggled: {key} - current: {current} -> new: {new_value}, verified: {verified_value}")
+            
+            # Double-check verification
+            if verified_value != new_value:
+                logger.error(f"🔴 Verification failed: expected {new_value}, got {verified_value}")
+                return {
+                    "success": False,
+                    "key": key,
+                    "value": verified_value,
+                    "error": "Verification failed - value was not saved correctly",
+                    "expected": new_value,
+                    "actual": verified_value
+                }
             
             return {
                 "success": True,
@@ -91,6 +109,8 @@ async def toggle_setting(key: str):
         else:
             logger.error(f"🔴 Failed to save setting {key}")
             raise HTTPException(status_code=500, detail=f"Failed to toggle setting {key}")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"🔴 Failed to toggle setting {key}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
