@@ -147,6 +147,9 @@ app.include_router(admin_router)
 # Include settings management router
 app.include_router(settings_router)
 
+# Log settings file path for debugging
+from integrations.admin.settings_manager import SETTINGS_FILE
+logger.info(f"Settings file path: {SETTINGS_FILE}")
 
 # Startup logging & production safety flags
 env = os.getenv('ENV', 'development')

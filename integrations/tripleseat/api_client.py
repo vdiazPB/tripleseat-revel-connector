@@ -188,3 +188,38 @@ class TripleSeatAPIClient:
         except Exception as e:
             logger.error(f"[check_tripleseat_access] OAuth 1.0 validation error: {e}")
             return False
+    def update_event(self, event_id: int, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update an event using PUT request with OAuth 1.0 signature.
+        
+        Args:
+            event_id: TripleSeat event ID
+            payload: Update payload (e.g., {'event': {'status': 'CLOSED'}})
+            
+        Returns:
+            Updated event dictionary or None if API call fails
+        """
+        try:
+            url = f"{self.base_url}/v1/events/{event_id}"
+            response = self.session.put(url, json=payload, timeout=10)
+            response.raise_for_status()
+            
+            data = safe_json_response(response)
+            if data:
+                logger.info(f"✅ [update_event] Updated event {event_id} via OAuth 1.0")
+                return data.get('event')
+            return None
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                logger.warning(f"[update_event] Event {event_id} not found (404)")
+                return None
+            elif e.response.status_code == 401:
+                logger.error(f"[update_event] OAuth 1.0 authentication failed (401)")
+                return None
+            logger.error(f"[update_event] HTTP error: {e.response.status_code} - {e}")
+            return None
+        except ValueError as e:
+            logger.error(f"[update_event] Response validation error: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"[update_event] Error updating event {event_id}: {e}")
+            return None

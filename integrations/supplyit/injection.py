@@ -178,7 +178,7 @@ def inject_order_to_supplyit(
     if effective_dry_run:
         logger.info(f"{req_id} [DRY_RUN] Would create order for {len(order_items)} items in Special Events location")
         for idx, item in enumerate(order_items):
-            logger.info(f"{req_id} [DRY_RUN] Item {idx+1}: {item['Product']['Name']} x{item['UnitsOrdered']}")
+            logger.info(f"{req_id} [DRY_RUN] Item {idx+1}: product_id={item['Product']['ID']} x{item['StartingOrder']}")
         logger.info(f"{req_id} [DRY_RUN] Supply It write PREVENTED – DRY_RUN=true")
         return InjectionResult(True)
     
@@ -186,15 +186,6 @@ def inject_order_to_supplyit(
     # Note: OrderItems must use StartingOrder (per API spec)
     # Contact Code "8" = C: Special Events internal contact
     # Location header "#c11" = Sunset Commissary
-    order_items_formatted = [
-        {
-            "Product": {"ID": item['Product']['ID']},
-            "StartingOrder": item['UnitsOrdered'],
-            "UnitPrice": item.get('UnitPrice', 0)
-        }
-        for item in order_items
-    ]
-    
     order_data = {
         "Contact": {
             "Code": "8"  # C: Special Events internal contact
@@ -203,7 +194,7 @@ def inject_order_to_supplyit(
             "Code": "Production 01"  # Production shift
         },
         "OrderDate": event_date,
-        "OrderItems": order_items_formatted,
+        "OrderItems": order_items,  # Use order_items directly - already properly formatted
         "OrderNotes": f"TripleSeat Event {event_id} - {event_name} - {datetime.now().isoformat()}",
         "OrderStatus": "Open",
         "OrderViewType": "SalesOrder",

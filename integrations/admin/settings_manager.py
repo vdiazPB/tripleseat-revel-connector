@@ -6,8 +6,28 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Path to settings file (at project root: config/settings.json)
-SETTINGS_FILE = Path(__file__).parent.parent.parent / 'config' / 'settings.json'
+# Determine settings file path
+def _get_settings_file_path():
+    """Get the settings file path, with fallback options for different environments."""
+    # First check if explicitly set via environment
+    if os.getenv('SETTINGS_FILE'):
+        return Path(os.getenv('SETTINGS_FILE'))
+    
+    # Try project config directory first (local development)
+    project_config = Path(__file__).parent.parent.parent / 'config' / 'settings.json'
+    if project_config.parent.exists() and os.access(project_config.parent, os.W_OK):
+        return project_config
+    
+    # Fallback to /tmp for Render or other restricted environments
+    if os.getenv('RENDER') or os.getenv('ENV') == 'production':
+        tmp_config = Path('/tmp') / 'settings.json'
+        logger.info(f"Using fallback settings path for production: {tmp_config}")
+        return tmp_config
+    
+    # Final fallback to project config
+    return project_config
+
+SETTINGS_FILE = _get_settings_file_path()
 
 class SettingsManager:
     """Manage application settings from persistent JSON file."""
@@ -23,9 +43,10 @@ class SettingsManager:
                 return settings
             else:
                 logger.warning(f"Settings file not found at {SETTINGS_FILE}, using defaults")
+                logger.info(f"Settings file path: {SETTINGS_FILE} (parent exists: {SETTINGS_FILE.parent.exists()})")
                 return SettingsManager._get_defaults()
         except Exception as e:
-            logger.error(f"Failed to load settings: {e}")
+            logger.error(f"Failed to load settings from {SETTINGS_FILE}: {e}")
             return SettingsManager._get_defaults()
     
     @staticmethod
@@ -53,8 +74,12 @@ class SettingsManager:
                 logger.info(f"✅ Verified content: {json.dumps(verified, indent=2)}")
                 return True
             else:
-                logger.error(f"🔴 Settings file not found after save!")
+                logger.error(f"🔴 Settings file not found after save at {SETTINGS_FILE}!")
                 return False
+        except IOError as e:
+            logger.error(f"🔴 IO Error saving settings to {SETTINGS_FILE}: {e}", exc_info=True)
+            logger.error(f"🔴 Directory writable: {os.access(SETTINGS_FILE.parent, os.W_OK) if SETTINGS_FILE.parent.exists() else 'parent does not exist'}")
+            return False
         except Exception as e:
             logger.error(f"🔴 Failed to save settings: {e}", exc_info=True)
             return False
